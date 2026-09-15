@@ -13,6 +13,7 @@ from primes.core.types import N_MIN_PULSES
 
 DEFAULT_PATH = Path(__file__).resolve().parents[1] / "assets" / "priors.json"
 PERIOD_RANGE_S = (0.5, 30.0)
+N_GRID = 48
 
 
 def p_overlap(d: np.ndarray | float, w: np.ndarray, period: np.ndarray, min_overlap: np.ndarray):
@@ -72,6 +73,12 @@ class Priors:
     def p_detect_search(self, dwell_s: float, n_min: int = N_MIN_PULSES) -> float:
         """Chance a dwell detects an unknown emitter of this population, given it is in coverage."""
         return float(np.mean(p_overlap(dwell_s, self.flash_s, self.period_s, (n_min - 1) * self.pri_s)))
+
+    @cached_property
+    def hypotheses(self) -> tuple[np.ndarray, np.ndarray, int]:
+        """Cached (periods, weights, n_discrete) from `period_hypotheses`."""
+        periods, weights = self.period_hypotheses()
+        return periods, weights, len(periods) - N_GRID
 
     def period_hypotheses(self, n_grid: int = 48, min_mass: float = 0.004) -> tuple[np.ndarray, np.ndarray]:
         """Discrete + continuous period hypotheses with prior weights (sum to 1).

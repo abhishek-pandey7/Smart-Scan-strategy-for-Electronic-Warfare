@@ -78,6 +78,7 @@ class Oracle(Policy):
         self.caught = np.zeros(len(arr), dtype=bool)
         self.toas = {e: self.truth.emitter_toas(e) for e in np.unique(self.f_em)}
         self.cover = np.abs(self.f_freq[:, None] - CENTRES_MHZ[None, :]) <= ACCEPT_HALF_WIDTH_MHZ
+        self.caught |= ~self.cover.any(axis=1)          # outside receiver coverage: never catchable
 
     def _ready_time(self, idx: np.ndarray, t: float) -> np.ndarray:
         """Time by which N_MIN_PULSES of each flash will have arrived, starting to listen at t."""

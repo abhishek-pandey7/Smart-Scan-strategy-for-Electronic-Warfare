@@ -10,14 +10,14 @@ from primes.core.types import (ACCEPT_HALF_WIDTH_MHZ, CENTRES_MHZ, N_CENTRES, RA
                                EmitterInfo, Truth)
 from primes.data.priors import Priors
 
-SIM_FAMILIES = ("easy", "lockout", "popup", "dense")
+SIM_FAMILIES = ("easy", "lockout", "popup", "dense", "mixed")
 MAX_PULSES_PER_FLASH = 200
 
 
 @dataclass
 class EmitterSpec:
     id: int
-    kind: str                 # "circular" | "omni"
+    kind: str                 # "circular" | "omni" | "markov"
     freqs_mhz: list[float]
     freq_mode: str = "FixedSingle"
     period_s: float = 4.0
@@ -27,9 +27,21 @@ class EmitterSpec:
     appear_s: float = 0.0
     label: str = ""
     role: str = ""
+    mean_on_s: float = 1.0    # markov emitters: mean visible / invisible durations
+    mean_off_s: float = 3.0
 
 
 def _pulses(spec: EmitterSpec, horizon: float, rng: np.random.Generator):
+    if spec.kind == "markov":
+        pri = max(spec.pri_s, 0.001)
+        toas, t, on = [], spec.appear_s, bool(rng.random() < spec.mean_on_s / (spec.mean_on_s + spec.mean_off_s))
+        while t < horizon:
+            dur = rng.exponential(spec.mean_on_s if on else spec.mean_off_s)
+            if on:
+                toas.append(np.arange(t, min(t + dur, horizon), pri))
+            t, on = t + dur, not on
+        toa = np.concatenate(toas) if toas else np.empty(0)
+        return toa, np.full(len(toa), spec.freqs_mhz[0])
     if spec.kind == "omni":
         pri = max(spec.pri_s, 0.001)
         toa = np.arange(spec.appear_s, horizon, pri)
@@ -162,6 +174,14 @@ def make_scenario(family: str, seed: int, priors: Priors, horizon: float = 60.0)
 
     elif family == "dense":
         specs = _sample_population(priors, 40, rng)
+
+    elif family == "mixed":
+        specs = _sample_population(priors, 20, rng)
+        for i in range(20):
+            on, off = float(rng.choice([0.5, 1.5, 5.0])), float(rng.choice([1.5, 5.0, 15.0]))
+            specs.append(EmitterSpec(id=20 + i, kind="markov", freqs_mhz=[float(rng.uniform(500, 18000))],
+                                     pri_s=0.002, mean_on_s=on, mean_off_s=off, role="intermittent",
+                                     label=f"intermittent on={on:g}s off={off:g}s"))
 
     else:
         raise ValueError(f"unknown scenario family {family!r}")

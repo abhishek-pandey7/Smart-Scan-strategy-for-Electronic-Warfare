@@ -4,10 +4,16 @@ from __future__ import annotations
 
 import numpy as np
 
-from primes.core.types import N_MIN_PULSES, Truth
+from primes.core.types import ACCEPT_HALF_WIDTH_MHZ, CENTRES_MHZ, N_MIN_PULSES, Truth
 from primes.eval.replay import Trace
 
 PREDICTION_TOL_S = 0.010
+FLASH_LIKE_DUTY = 0.05          # emitters visible < 5 % of the time count as flash-like for prediction scoring
+
+
+def visibility_duty(truth: Truth, emitter_id: int) -> float:
+    fl = truth.flashes.get(emitter_id)
+    return 0.0 if fl is None else float(np.sum(fl[:, 1] - fl[:, 0]) / truth.horizon_s)
 
 
 def intercepted_flashes(trace: Trace, truth: Truth) -> dict[int, dict[int, float]]:
@@ -34,7 +40,8 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
     for e, fl in truth.flashes.items():
         if e < 0:
             continue
-        able = np.flatnonzero(fl[:, 2] >= N_MIN_PULSES)
+        coverable = np.abs(fl[:, 3:4] - CENTRES_MHZ[None, :]).min(axis=1) <= ACCEPT_HALF_WIDTH_MHZ
+        able = np.flatnonzero((fl[:, 2] >= N_MIN_PULSES) & coverable)
         if len(able) == 0:
             continue
         hits = caught.get(e, {})
@@ -51,10 +58,12 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
     n_emitters = len(per_emitter_ratio)
 
     pred_err = []
+    flash_like = {e for e in truth.flashes if e >= 0 and visibility_duty(truth, e) < FLASH_LIKE_DUTY}
     for t_now, e, pred in trace.logs.predictions:
         fl = truth.flashes.get(e)
-        if fl is None:
+        if fl is None or e not in flash_like:
             continue
+        fl = fl[fl[:, 2] >= N_MIN_PULSES]
         nxt = fl[fl[:, 0] > t_now + 0.02, 0]
         if len(nxt):
             pred_err.append(abs(pred - nxt[0]))
@@ -69,6 +78,7 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         "scenario": trace.scenario,
         "seed": trace.seed,
         "emitters": n_emitters,
+        "flash_like_emitters": len(flash_like),
         "interceptable_flashes": n_able,
         "intercepted_flashes": n_hit,
         "interception_ratio": n_hit / n_able if n_able else 0.0,
