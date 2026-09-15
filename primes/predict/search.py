@@ -23,12 +23,17 @@ VISIBLE_FRACTION = 0.6          # share of listed emitters that are ever interce
 PSEUDO_EXPOSURE = 2.0           # prior strength of kappa = 1, in expected discoveries
 KAPPA_RANGE = (0.5, 100.0)
 MAX_P_DETECT = 0.9
+MIN_MASS = 1e-3                 # a cell is never fully written off; the pop-up hazard regrows it
 
 
 class UndiscoveredBelief:
-    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05):
-        self.m = np.full(N_CELLS, VISIBLE_FRACTION * priors.emitters_per_scenario / N_CELLS)
-        self.rho = popup_rate_per_s / N_CELLS
+    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05, use_freq_prior: bool = False):
+        # The learned frequency density (78 % of emitters in 12 of 72 cells) is available but off by
+        # default: within a 30-60 s engagement it over-focuses search on the hot bands and starves the
+        # rest (measured: Turing discovery +4 pts but interception -3 pts). Kept as an ablation.
+        density = priors.cell_density(N_CELLS) if use_freq_prior else np.full(N_CELLS, 1.0 / N_CELLS)
+        self.m = VISIBLE_FRACTION * priors.emitters_per_scenario * density
+        self.rho = popup_rate_per_s * density
         self.cover = (np.abs(CELL_CENTRES_MHZ[None, :] - CENTRES_MHZ[:, None]) < ACCEPT_HALF_WIDTH_MHZ).astype(float)
         self.p_prior = np.array([priors.p_detect_search(d) for d in DWELL_OPTIONS_S])
         self.discoveries = 0.0
@@ -47,12 +52,16 @@ class UndiscoveredBelief:
         self.m += self.rho * max(t - self.t, 0.0)
         self.t = t
 
-    def observe(self, centre: int, dwell_s: float, new_emitters: int) -> None:
-        """Update after a look: learn kappa from discoveries, then thin undiscovered emitters in its cells."""
+    def observe(self, centre: int, dwell_s: float, new_freqs_mhz: list[float]) -> None:
+        """Update after a look: learn kappa from discoveries, remove each newly found emitter from its
+        cell's expected count, then thin the undiscovered mass in the covered cells."""
         prior_p = float(np.interp(dwell_s, DWELL_OPTIONS_S, self.p_prior))
         in_cover = float(self.cover[centre] @ self.m)
         self.exposure += in_cover * prior_p
-        self.discoveries += new_emitters
+        self.discoveries += len(new_freqs_mhz)
+        for f in new_freqs_mhz:
+            cell = int(np.clip(f // 250.0, 0, N_CELLS - 1))
+            self.m[cell] = max(self.m[cell] - 1.0, MIN_MASS)
         p = min(prior_p * self.kappa, MAX_P_DETECT)
         self.m *= 1.0 - p * self.cover[centre]
 

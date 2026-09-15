@@ -20,6 +20,7 @@ POLICY_INFO = {
     "primes": "PRIMES-lite: learned priors + periodic/Markov tracks + value-per-time index",
     "primes_flat": "PRIMES-lite ablation: flat (unlearned) period prior",
     "primes_no_ig": "PRIMES-lite ablation: no information-gain term",
+    "primes_fprior": "PRIMES-lite variant: search seeded with the learned frequency distribution",
     "oracle": "Clairvoyant reference: sees the truth (upper bound)",
 }
 
@@ -59,6 +60,8 @@ def make_policy(name: str) -> Policy:
         return PrimesLite(priors=Priors.flat(), name="primes_flat")
     if name == "primes_no_ig":
         return PrimesLite(use_info_gain=False, name="primes_no_ig")
+    if name == "primes_fprior":
+        return PrimesLite(use_freq_prior=True, name="primes_fprior")
     if name == "dqn":
         from primes.policies.dqn import DQNPolicy
         return DQNPolicy()
