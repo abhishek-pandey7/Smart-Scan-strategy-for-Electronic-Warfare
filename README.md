@@ -2,11 +2,50 @@
 
 **P**redictive **R**estless **I**ndex for **M**ultiband **E**lectronic **S**upport: a machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on emitters.
 
-The full design, trade study, phases and verification plan are in [`PLAN.md`](PLAN.md).
+- Full design and PPT content: [`docs/PRIMES_FULL_ARCHITECTURE.md`](docs/PRIMES_FULL_ARCHITECTURE.md) (on the docs branch)
+- Prototype scope: [`docs/PRIMES_PROTOTYPE.md`](docs/PRIMES_PROTOTYPE.md)
+- Dataset findings: [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md)
+- Original plan: [`PLAN.md`](PLAN.md)
 
-## Data
+## What's in the prototype
 
-This project uses the [Turing Synthetic Radar Dataset](https://huggingface.co/datasets/alan-turing-institute/turing-synthetic-radar-dataset) (Apache-2.0, gated). Request access on Hugging Face, run `huggingface-cli login`, then download files into `data/raw/`. That folder is git-ignored.
+| Part | Where |
+|---|---|
+| Receiver model (Turing replica: 36 centres, ±500 MHz, 2.15 s raster), scenarios, pulse-level truth | `primes/env`, `primes/core` |
+| Learned emitter priors from 2,500 Turing training scenarios (HF API) | `primes/data/fit_priors.py` → `primes/assets/priors.json` |
+| **PRIMES-lite**: periodic + Gilbert–Elliott track models, undiscovered-emitter belief with learned visibility, value-per-time index with information gain | `primes/predict`, `primes/policies/primes_lite.py` |
+| Baselines: raster, random, hit-rate bandit, clairvoyant oracle | `primes/policies/baselines.py` |
+| **Double-DQN** comparator (Stable-Baselines3) | `primes/rl` |
+| Exact replay, metrics, multi-seed benchmark with bootstrap CIs | `primes/eval`, `experiments/benchmark.py` |
+| FastAPI backend | `api/main.py` |
+| Next.js frontend (mission replay, benchmark) | `web/` |
+
+## Run it
+
+Python 3.11+ and Node 20+.
+
+```bash
+pip install -r requirements.txt
+pytest -q                                              # 20 tests
+
+# optional: refit priors (needs HF access; the fitted file is committed)
+python -m primes.data.fit_priors --split train_scan --limit 2500
+
+# optional: train the Double-DQN comparator (~25 min on CPU)
+python -m primes.rl.train_dqn --steps 600000
+
+# benchmark all schedulers (writes artifacts/benchmark.json)
+python -m experiments.benchmark --seeds 10 --workers 6
+
+# backend + frontend
+uvicorn api.main:app --port 8000
+cd web && npm install && npm run dev                   # http://localhost:3000
+```
+
+Demo link that auto-runs a replay:
+`http://localhost:3000/?scenario=lockout&seed=0&a=raster&b=primes&autorun=1`
+
+Turing scenarios (`turing:<config>`) are fetched from Hugging Face on first use and need accepted access plus `huggingface-cli login`. They are stored under `data/raw/` (git-ignored).
 
 ## Branching
 
