@@ -1,0 +1,14 @@
+[project]
+name = "primes"
+version = "0.1.0"
+description = "PRIMES: Predictive Restless Index for Multiband Electronic Support"
+requires-python = ">=3.11"
+
+[tool.setuptools.packages.find]
+include = ["primes*"]
+
+[tool.setuptools.package-data]
+primes = ["assets/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
