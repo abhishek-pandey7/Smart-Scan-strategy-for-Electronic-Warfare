@@ -66,6 +66,14 @@ class Priors:
         return cls.load(path) if Path(path).exists() else cls.flat()
 
     # ------------------------------------------------------------------ derived quantities
+    def cell_density(self, n_cells: int = 72, cell_mhz: float = 250.0, floor: float = 0.25) -> np.ndarray:
+        """Where emitters sit in frequency: empirical share per cell, mixed with a uniform floor so
+        no cell is ever written off. Sums to 1. Every listed frequency of an emitter counts."""
+        f = np.array([x for fs in self.freqs_mhz for x in fs])
+        hist, _ = np.histogram(f, bins=np.arange(0.0, cell_mhz * (n_cells + 1), cell_mhz))
+        emp = hist / max(hist.sum(), 1)
+        return (1.0 - floor) * emp + floor / n_cells
+
     @cached_property
     def median_flash_s(self) -> float:
         return float(np.median(self.flash_s))
