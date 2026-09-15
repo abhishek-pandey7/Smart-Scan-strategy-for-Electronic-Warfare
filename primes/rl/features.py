@@ -4,15 +4,18 @@ from __future__ import annotations
 
 import numpy as np
 
-from primes.core.types import DWELL_OPTIONS_S, N_CENTRES, Action, Look
+from primes.core.types import N_CENTRES, Action, Look
 
 N_FEATURES = 6
 OBS_DIM = N_CENTRES * N_FEATURES + 1
-N_ACTIONS = N_CENTRES * len(DWELL_OPTIONS_S)
+# The comparator selects bands at a fixed 25 ms dwell. A fixed step duration keeps the per-step
+# discount consistent with elapsed time (variable dwells would make it a semi-MDP).
+DQN_DWELLS_S = (0.025,)
+N_ACTIONS = N_CENTRES * len(DQN_DWELLS_S)
 
 
 def decode_action(a: int) -> Action:
-    return Action(int(a // len(DWELL_OPTIONS_S)), float(DWELL_OPTIONS_S[a % len(DWELL_OPTIONS_S)]))
+    return Action(int(a // len(DQN_DWELLS_S)), float(DQN_DWELLS_S[a % len(DQN_DWELLS_S)]))
 
 
 class ObsBuilder:
