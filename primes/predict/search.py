@@ -23,7 +23,6 @@ VISIBLE_FRACTION = 0.6          # share of listed emitters that are ever interce
 PSEUDO_EXPOSURE = 2.0           # prior strength of kappa = 1, in expected discoveries
 KAPPA_RANGE = (0.5, 100.0)
 MAX_P_DETECT = 0.9
-MIN_MASS = 1e-3                 # a cell is never fully written off; the pop-up hazard regrows it
 
 
 class UndiscoveredBelief:
@@ -53,15 +52,14 @@ class UndiscoveredBelief:
         self.t = t
 
     def observe(self, centre: int, dwell_s: float, new_freqs_mhz: list[float]) -> None:
-        """Update after a look: learn kappa from discoveries, remove each newly found emitter from its
-        cell's expected count, then thin the undiscovered mass in the covered cells."""
+        """Update after a look: learn kappa from discoveries, then thin the undiscovered mass in the
+        covered cells. Undiscovered emitters are a Poisson count, so a discovery does *not* lower the
+        expected number still hidden (independent increments); subtracting one per discovery was tried
+        and measured worse (easy 65.5% -> 57.6%). Only the look-based thinning is a valid update."""
         prior_p = float(np.interp(dwell_s, DWELL_OPTIONS_S, self.p_prior))
         in_cover = float(self.cover[centre] @ self.m)
         self.exposure += in_cover * prior_p
         self.discoveries += len(new_freqs_mhz)
-        for f in new_freqs_mhz:
-            cell = int(np.clip(f // 250.0, 0, N_CELLS - 1))
-            self.m[cell] = max(self.m[cell] - 1.0, MIN_MASS)
         p = min(prior_p * self.kappa, MAX_P_DETECT)
         self.m *= 1.0 - p * self.cover[centre]
 
