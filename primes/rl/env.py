@@ -18,9 +18,11 @@ class ScanEnv(gym.Env):
     metadata = {"render_modes": []}
 
     def __init__(self, priors: Priors, families=SIM_FAMILIES, horizon_s: float = 60.0,
-                 seed_offset: int = 10_000, p_d: float = 1.0):
+                 seed_offset: int = 10_000, p_d: float = 1.0, fixed_set: int | None = None):
+        """`fixed_set=N` cycles through the same N scenarios (one per family in turn) so repeated
+        evaluations are comparable; None draws a fresh random scenario every episode (training)."""
         self.priors, self.families, self.horizon = priors, tuple(families), horizon_s
-        self.seed_offset, self.p_d = seed_offset, p_d
+        self.seed_offset, self.p_d, self.fixed_set = seed_offset, p_d, fixed_set
         self.observation_space = gym.spaces.Box(-1.0, 10.0, shape=(OBS_DIM,), dtype=np.float32)
         self.action_space = gym.spaces.Discrete(N_ACTIONS)
         self.episode = 0
@@ -38,8 +40,13 @@ class ScanEnv(gym.Env):
         super().reset(seed=seed)
         truth = (options or {}).get("truth")
         if truth is None:
-            fam = self.families[self.np_random.integers(len(self.families))]
-            truth = make_scenario(fam, self.seed_offset + self.episode, self.priors, self.horizon)
+            if self.fixed_set:
+                i = self.episode % self.fixed_set
+                fam, seed = self.families[i % len(self.families)], self.seed_offset + i
+            else:
+                fam = self.families[self.np_random.integers(len(self.families))]
+                seed = self.seed_offset + self.episode
+            truth = make_scenario(fam, seed, self.priors, self.horizon)
         self.episode += 1
         self._load(truth)
         self.rx = Receiver(truth, np.random.default_rng(self.np_random.integers(2**31)), p_d=self.p_d)
