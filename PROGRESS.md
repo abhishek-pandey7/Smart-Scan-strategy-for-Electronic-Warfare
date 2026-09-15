@@ -1,6 +1,6 @@
 # PRIMES — Progress
 
-_Last updated: 2026-09-16_
+_Last updated: 2026-09-16 (benchmark re-verified, 549 runs)_
 
 ## Status at a glance
 
@@ -118,6 +118,11 @@ Other metrics:
 - **Value of resolving + appointment blocking (this session's fix):** lock-out 48.2 % → 60.2 %, easy 62.5 % → 65.5 %, dense 63.0 % → 65.2 %, Turing 63.0 % → 64.5 % with discovery 87 % → 91 %.
 - **Parameter sweep** (`experiments/tune_wnew.py`, on training seeds and three Turing files outside the benchmark): the defaults `w_new = 2`, `stale = 2 s` are at the optimum of the cross-family mean; a higher discovery weight helps Turing slightly but costs lock-out, so defaults were kept.
 - **Information-gain term:** no measurable effect at this scale (all differences inside the CIs). Honest finding: the exploit + discovery terms already place looks well; IG is a candidate for removal or re-tuning.
+
+**Ideas tried and rejected (measured, then reverted or left off):**
+- **Search seeded with the learned frequency distribution** (78 % of emitters sit in 12 of 72 frequency cells). Worse on every scenario: Turing 64.5 % → 57.7 %, mixed 79.1 % → 47.7 %, easy 65.5 % → 34.6 %. Within a 30–60 s engagement it over-concentrates search on the busy bands and starves the rest. Kept as the `primes_fprior` ablation, off by default.
+- **Faster revisits (0.25–0.5 s) for intermittent emitters.** PRIMES camps on already-visible emitters instead of searching: Turing 74 % → 56 %, dense 70 % → 52 % on tuning scenarios. Rejected; the knob exists, default unchanged.
+- **Lowering the undiscovered-emitter count by one per discovery.** Statistically invalid for a Poisson count, and measured worse (easy 65.5 % → 57.6 %). Reverted.
 
 **Where PRIMES does not win:** on `dense` (and marginally on real data) raster discovers slightly *more* emitters (76 % vs 69 %; 93 % vs 91 %) at the same time-to-first-intercept. PRIMES trades a little breadth of search for 3.8× the flashes intercepted. `w_new` moves along this trade-off.
 
