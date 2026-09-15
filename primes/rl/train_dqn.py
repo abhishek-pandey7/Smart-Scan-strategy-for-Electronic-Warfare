@@ -33,7 +33,7 @@ def main() -> None:
 
     priors = Priors.load()
     env = Monitor(ScanEnv(priors, seed_offset=10_000))
-    val_env = Monitor(ScanEnv(priors, seed_offset=20_000))
+    val_env = Monitor(ScanEnv(priors, seed_offset=20_000, fixed_set=10))
     out = Path(args.out)
     best_dir = out.parent / "dqn_best"
 
@@ -41,7 +41,7 @@ def main() -> None:
                       batch_size=256, gamma=0.99, n_steps=5, train_freq=4, target_update_interval=5_000,
                       exploration_fraction=0.3, exploration_initial_eps=1.0, exploration_final_eps=0.05,
                       policy_kwargs={"net_arch": [256, 256]}, seed=args.seed, verbose=1, device="cpu")
-    callback = EvalCallback(val_env, n_eval_episodes=5, eval_freq=25_000, deterministic=True,
+    callback = EvalCallback(val_env, n_eval_episodes=10, eval_freq=25_000, deterministic=True,
                             best_model_save_path=str(best_dir), verbose=1)
     model.learn(total_timesteps=args.steps, log_interval=20, callback=callback)
 
