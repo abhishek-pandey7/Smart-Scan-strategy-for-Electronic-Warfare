@@ -74,21 +74,23 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     ctx.save();
     ctx.beginPath(); ctx.rect(PAD.left, PAD.top, plotW, plotH); ctx.clip();
 
-    // truth: interceptable flashes that have happened so far
+    // receiver dwells: the band each look covered (±250 MHz drawn, so neighbours stay distinct).
+    // Short search dwells are drawn faint so that thousands of them read as a wash, not a wall.
+    const n = lastIndexAtOrBefore(run.looks.t, cursor);
+    ctx.fillStyle = c.series;
+    for (let i = 0; i <= n; i++) {
+      const t = run.looks.t[i], f = scenario.centres_mhz[run.looks.centre[i]], d = run.looks.dwell_ms[i];
+      ctx.globalAlpha = d >= 50 ? 0.3 : d >= 25 ? 0.2 : 0.09;
+      ctx.fillRect(xOf(t), yOf(f + 250), Math.max(1, (d / 1000 / H) * plotW), yOf(f - 250) - yOf(f + 250));
+    }
+    ctx.globalAlpha = 1;
+
+    // truth on top: interceptable flashes that have happened so far
     ctx.fillStyle = c.truth;
     for (const [, , start, end, freq] of scenario.flashes.rows) {
       if (start > cursor) break;
       ctx.fillRect(xOf(start), yOf(freq) - 1.5, Math.max(1.5, xOf(end) - xOf(start)), 3);
     }
-
-    // receiver dwells: the band each look covered (±250 MHz drawn, so neighbours stay distinct)
-    const n = lastIndexAtOrBefore(run.looks.t, cursor);
-    ctx.globalAlpha = 0.28; ctx.fillStyle = c.series;
-    for (let i = 0; i <= n; i++) {
-      const t = run.looks.t[i], f = scenario.centres_mhz[run.looks.centre[i]];
-      ctx.fillRect(xOf(t), yOf(f + 250), Math.max(1, (run.looks.dwell_ms[i] / 1000 / H) * plotW), yOf(f - 250) - yOf(f + 250));
-    }
-    ctx.globalAlpha = 1;
 
     // intercepts: dots with a surface ring, at the time the flash was caught
     for (const [tHit, e, k] of run.intercepts) {
