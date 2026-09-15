@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 OUT = Path(__file__).resolve().parents[1] / "artifacts" / "benchmark.json"
+CHECKPOINT = OUT.with_name("benchmark_runs.jsonl")
 BENCHMARK_TURING = [3, 8, 17, 40, 62, 71, 122, 151, 192, 202, 203]
 METRICS = ["interception_ratio", "interception_ratio_per_emitter", "discovery_fraction", "ttfi_mean_s",
            "ttfi_p95_s", "popup_latency_mean_s", "prediction_correct_pct", "intercept_time_error_ms",
@@ -74,25 +75,41 @@ def main() -> None:
     ap.add_argument("--turing", nargs="*", type=int, default=BENCHMARK_TURING,
                     help="val_stare config ids (default: the fixed benchmark set; tuning uses 5, 50, 100)")
     ap.add_argument("--policies", nargs="*", default=None)
+    ap.add_argument("--fresh", action="store_true", help="discard saved partial results and start over")
     args = ap.parse_args()
 
     policies = args.policies or available_policies()
     turing = args.turing
     tasks = [(f, s, p) for f in args.families for s in range(args.seeds) for p in policies]
     tasks += [(f"turing:{c}", 0, p) for c in turing for p in policies]
-    print(f"{len(tasks)} runs: {len(args.families)} families x {args.seeds} seeds + {len(turing)} Turing scenarios, "
-          f"policies {policies}")
 
-    rows, t0 = [], time.time()
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futures = {pool.submit(_task, *t): t for t in tasks}
+    # Every finished run is appended to a checkpoint, so an interrupted benchmark resumes where it stopped.
+    if args.fresh:
+        CHECKPOINT.unlink(missing_ok=True)
+    rows = [json.loads(line) for line in CHECKPOINT.read_text().splitlines()] if CHECKPOINT.exists() else []
+    done = {(r["scenario"], r["seed"], r["policy"]) for r in rows}
+    todo = [t for t in tasks if t not in done]
+    print(f"{len(tasks)} runs: {len(args.families)} families x {args.seeds} seeds + {len(turing)} Turing scenarios, "
+          f"policies {policies}; {len(tasks) - len(todo)} already done, {len(todo)} to run", flush=True)
+
+    t0 = time.time()
+    CHECKPOINT.parent.mkdir(parents=True, exist_ok=True)
+    with ProcessPoolExecutor(max_workers=args.workers) as pool, CHECKPOINT.open("a") as ckpt:
+        futures = {pool.submit(_task, *t): t for t in todo}
         for i, fut in enumerate(as_completed(futures), 1):
             try:
-                rows.append(fut.result())
+                row = fut.result()
             except Exception as exc:
-                print(f"FAILED {futures[fut]}: {exc!r}")
-            if i % 25 == 0 or i == len(tasks):
-                print(f"{i}/{len(tasks)} done ({time.time() - t0:.0f}s)", flush=True)
+                print(f"FAILED {futures[fut]}: {exc!r}", flush=True)
+                continue
+            rows.append(row)
+            ckpt.write(json.dumps(row) + "\n")
+            ckpt.flush()
+            if i % 25 == 0 or i == len(todo):
+                print(f"{len(rows)}/{len(tasks)} done ({time.time() - t0:.0f}s)", flush=True)
+
+    wanted = set(tasks)
+    rows = [r for r in rows if (r["scenario"], r["seed"], r["policy"]) in wanted]
 
     result = {"generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
               "config": {"seeds": args.seeds, "families": args.families, "turing": turing, "policies": policies},
