@@ -36,6 +36,7 @@ class Look:
     t: float
     action: Action
     detections: dict[int, np.ndarray]    # emitter id -> received pulse ToAs (s); id -1 is a false alarm
+    freqs: dict[int, np.ndarray] = field(default_factory=dict)   # emitter id -> measured pulse frequencies (MHz)
 
 
 @dataclass
