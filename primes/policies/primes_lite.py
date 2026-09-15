@@ -11,7 +11,7 @@ from primes.core.types import CENTRES_MHZ, DWELL_OPTIONS_S, N_CENTRES, Action, L
 from primes.data.priors import Priors
 from primes.policies.base import Context, Policy
 from primes.predict.search import UndiscoveredBelief
-from primes.predict.track import Track
+from primes.predict.track import P_D_MODEL, Track
 
 GOLDEN = 0.6180339887
 
@@ -22,7 +22,19 @@ class PrimesLite(Policy):
     def __init__(self, lam: float = 0.3, w_new: float = 2.0, stale_s: float = 2.0, retune_s: float = 0.0,
                  search_threshold: float = 0.15, dither: float = 0.10, priors: Priors | None = None,
                  use_info_gain: bool = True, use_dither: bool = True, use_freq_prior: bool = False,
-                 stale_intermittent_s: float | None = None, name: str | None = None):
+                 stale_intermittent_s: float | None = None, dwells_s=DWELL_OPTIONS_S,
+                 retune_in_index: bool = True, min_track_dwell_s: float = 0.0, calibrate_dwells: bool = False,
+                 name: str | None = None):
+        # Online calibration per dwell length: observed detections of known emitters / predicted ones.
+        # Learns, e.g., that very short looks under-deliver on bursty real emitters.
+        self.calibrate_dwells = calibrate_dwells
+        self.dwells_s = tuple(dwells_s)
+        # retune_in_index=False: the retune time is still charged in replay, but the score does not
+        # favour staying on the same centre (that bias makes search camp on one band).
+        self.retune_in_index = retune_in_index
+        # dwells shorter than this are used for search only: too short to reliably catch n_min pulses
+        # of a known emitter, so they carry no exploit or information value.
+        self.min_track_dwell_s = min_track_dwell_s
         self.use_freq_prior = use_freq_prior
         # Revisit interval for on/off emitters. Shorter values (0.25-0.5 s) were tested and make PRIMES
         # camp on visible emitters instead of searching (Turing interception 74% -> 56%); keep = stale_s.
@@ -38,12 +50,15 @@ class PrimesLite(Policy):
         super().reset(ctx)
         self.priors = self.priors_override or ctx.priors
         self.tracks: dict[int, Track] = {}
-        self.search = UndiscoveredBelief(self.priors, use_freq_prior=self.use_freq_prior)
+        self.search = UndiscoveredBelief(self.priors, use_freq_prior=self.use_freq_prior, dwells_s=self.dwells_s)
         self.look_t: list[float] = []
         self.look_d: list[float] = []
         self.look_c: list[int] = []
-        self.dwells = np.array(DWELL_OPTIONS_S)
+        self.dwells = np.array(self.dwells_s)
         self.prev_centre: int | None = None
+        self.cal_pred = np.zeros(len(self.dwells))
+        self.cal_hits = np.zeros(len(self.dwells))
+        self._pred_look = 0.0
         self.step = 0
         self.centre_phase = ctx.rng.random(N_CENTRES)
         self._last = {}
@@ -54,6 +69,7 @@ class PrimesLite(Policy):
         n_d = len(self.dwells)
         exploit = np.zeros((N_CENTRES, n_d))
         info = np.zeros((N_CENTRES, n_d))
+        expected = np.zeros((N_CENTRES, n_d))     # raw expected detections of known emitters
         best_track, best_p = None, 0.0
         horizon = float(self.dwells[-1])
         next_appt, appt_cover = np.inf, None
@@ -68,12 +84,20 @@ class PrimesLite(Policy):
             g = min(1.0, (t - tr.last_hit) / stale)
             exploit += np.outer(tr.cover, g * v)
             info += np.outer(tr.cover, ig)
+            expected += np.outer(tr.cover, p)
             if p.max() * g > best_p:
                 best_track, best_p = tr, float(p.max() * g)
 
+        if self.calibrate_dwells:
+            exploit = exploit * self.dwell_calibration()[None, :]
         discovery = self.w_new * self.search.value()
+        if self.min_track_dwell_s > 0:
+            search_only = self.dwells < self.min_track_dwell_s
+            exploit[:, search_only] = 0.0
+            info[:, search_only] = 0.0
         value = exploit + discovery + (self.lam * info if self.use_info_gain else 0.0)
-        cost = self.dwells[None, :] + self.retune_s * (np.arange(N_CENTRES) != self.prev_centre)[:, None]
+        retune_bias = self.retune_s if self.retune_in_index else 0.0
+        cost = self.dwells[None, :] + retune_bias * (np.arange(N_CENTRES) != self.prev_centre)[:, None]
         index = value / cost
         if appt_cover is not None and next_appt > t:
             # never be busy elsewhere when a confident track's flash is due: a dwell may not run past
@@ -88,6 +112,7 @@ class PrimesLite(Policy):
             index = index * (1.0 + self.dither * jitter)[:, None]
 
         c, j = np.unravel_index(int(np.argmax(index)), index.shape)
+        self._pred_look = float(expected[c, j])
         self.step += 1
         self._last = {
             "t": round(t, 4), "centre_mhz": float(CENTRES_MHZ[c]), "dwell_ms": float(self.dwells[j] * 1e3),
@@ -135,11 +160,19 @@ class PrimesLite(Policy):
             if new_flash:
                 self.logs.tracks.append((look.t, e, float(T) if np.isfinite(T) else -1.0, conf))
 
+        j = int(np.argmin(np.abs(self.dwells - a.dwell_s)))
+        known_hits = sum(1 for e in detected if e in self.tracks and self.tracks[e].n_hits > 1)
+        self.cal_pred[j] += self._pred_look
+        self.cal_hits[j] += known_hits
+        p_d = min(0.99, P_D_MODEL * self.dwell_calibration()[j]) if self.calibrate_dwells else P_D_MODEL
         for e, tr in self.tracks.items():
             if e not in detected:
-                tr.miss(look.t, a.dwell_s, a.centre)
+                tr.miss(look.t, a.dwell_s, a.centre, p_d=p_d)
 
         self.prev_centre = a.centre
+
+    def dwell_calibration(self, pseudo: float = 3.0) -> np.ndarray:
+        return np.clip((self.cal_hits + pseudo) / (self.cal_pred + pseudo), 0.2, 1.2)
 
     def explain(self) -> dict:
         return self._last

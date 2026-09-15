@@ -20,7 +20,7 @@ import numpy as np
 OUT = Path(__file__).resolve().parents[1] / "artifacts" / "benchmark.json"
 CHECKPOINT = OUT.with_name("benchmark_runs.jsonl")
 BENCHMARK_TURING = [3, 8, 17, 40, 62, 71, 122, 151, 192, 202, 203]
-METRICS = ["interception_ratio", "interception_ratio_per_emitter", "discovery_fraction", "ttfi_mean_s",
+METRICS = ["interception_ratio", "tracked_ratio", "pre_discovery_loss", "interception_ratio_per_emitter", "discovery_fraction", "ttfi_mean_s",
            "ttfi_p95_s", "popup_latency_mean_s", "prediction_correct_pct", "intercept_time_error_ms",
            "intercept_time_error_median_ms", "intercept_rate_per_s", "mean_dwell_ms"]
 
