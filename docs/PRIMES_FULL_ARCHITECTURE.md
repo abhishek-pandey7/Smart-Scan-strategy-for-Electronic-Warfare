@@ -20,16 +20,16 @@
 
 | Finding | Value |
 |---|---|
-| Typical emitter as seen by an ES receiver | a **main-beam flash of ~14 ms every ~4 s** (median) |
-| Flash width range | 0.33 ms – 42 ms (p90) |
-| Scan period range | 0.5 s – 15 s (p90), tail to 600 s |
+| Typical emitter per its metadata (beamwidth × scan period) | a **main-beam flash of ~14 ms every ~4 s** (median); flash 0.33–42 ms (p90), period 0.5–15 s (p90), tail to 600 s |
+| **Typical emitter as actually observed** (stare-mode pulses, 431 emitters) | visible a **median 32 %** of the window in long, irregular stretches; only **12 %** of emitters are short-flash-like |
+| Scan periods in the population (128,252 emitters, learned prior) | **96 % fall on just 22 discrete values** (2 s, 10 s, 1 s, 4 s, 5 s, …) |
 | Emitters per scenario | median 51, up to 100 |
 | Open-loop reference receiver (reverse-engineered) | 36 dwell centres, **±500 MHz acceptance**, fixed **2.15 s** cycle of 50 / 100 ms dwells, explains **99.987 %** of 22.7 M pulses |
 | Dwell time covering any given frequency (2–3 overlapping dwells) | 50–200 ms per 2.15 s cycle (median 100 ms) |
 | **Open-loop raster: flashes intercepted** (measured: real schedule replayed on 11 Turing stare scenarios, ≥ 3-pulse detection) | **≈ 6 %** of narrow main-beam flashes (< 50 ms); 11.5 % of all flashes including broad-beam and omni |
 | Receiver time needed to *track* one known emitter | **≈ 0.6 %** (estimate: a 25 ms look every 4 s) |
 
-**Insight:** once an emitter's period and phase are known, following it is almost free, so most receiver time can go to search. The hard part is *learning* timing from the few flashes a 30 s engagement provides (~7 per emitter). That calls for an explicit, sample-efficient model, with learning layered on top.
+**Insight:** emitters come in two regimes. For periodic scanners, once period and phase are known following them is almost free, so receiver time can go to search, and the learned prior of 22 discrete periods means one or two catches pin the period down. For the intermittently visible majority the question is "is it on right now?", which an on/off belief that decays between looks answers. Either way, the hard part is learning from the few observations a 30 s engagement provides, which calls for an explicit, sample-efficient model, with learning layered on top.
 
 ---
 
@@ -209,6 +209,7 @@ The shield bounds how far `I^final` may diverge from the analytic choice.
 **Physics of the gain (estimates):**
 - **Search:** per unit of receiver time, a dwell of length `d` catches an unknown-phase flash at rate `(d + w) / (T·(d + τ))`. With `w` = 14 ms and `τ` = 1 ms, 10 ms dwells search ~**2×** more efficiently than 100 ms dwells.
 - **Tracking:** once a track is locked, interception of its flashes approaches 100 % at ~0.6 % receiver-time cost.
+- **Measured (prototype, single seeds, before the multi-seed benchmark):** flash interception 0.7 % → 47 % on the lock-out scenario (raster → PRIMES), 15–17 % → 65–66 % on two real Turing scenarios, with PRIMES learning lock-out periods (2.150 s, 2.200 s) exactly and 97 % of its next-flash predictions correct.
 
 ---
 
@@ -426,7 +427,7 @@ All metrics are reported over 30+ seeds with bootstrap confidence intervals, str
 | Tuning | Optuna |
 | Data | huggingface_hub (streaming), h5py, Parquet cache |
 | Config / experiments | Hydra, pytest |
-| Visualisation / demo | Streamlit, Plotly |
+| Backend / demo | FastAPI + Uvicorn; Next.js (React, TypeScript) frontend with canvas/SVG charts |
 | Edge path | ONNX-exported residual policy; NumPy / C++ port of the index loop |
 
 ---
@@ -473,14 +474,17 @@ All metrics are reported over 30+ seeds with bootstrap confidence intervals, str
 | Component | Status |
 |---|---|
 | Turing dataset analysis and receiver reverse-engineering | ✅ done |
-| Simulator (periodic emitters, Turing receiver) | 🧪 prototype |
-| Baselines: raster, random, greedy, oracle | 🧪 prototype |
-| PRIMES-lite: periodic tracks, undiscovered belief, rate index + IG, dither | 🧪 prototype |
-| Core metrics + Turing replay on sample scenarios | 🧪 prototype |
-| Live demo UI | 🧪 prototype |
-| Learned association, expanded hypotheses | 🗺️ roadmap |
-| DQN comparator, residual RL + shield | 🗺️ roadmap |
-| Full ablations, stratified statistics | 🗺️ roadmap |
+| Learned priors from 2,500 Turing training scenarios (HF API streaming) | ✅ done |
+| Simulator (periodic, omni, intermittent Markov and pop-up emitters; Turing receiver replica) | ✅ prototype |
+| Baselines: raster, random, greedy bandit, clairvoyant oracle | ✅ prototype |
+| PRIMES-lite: periodic + Markov tracks, undiscovered belief with learned visibility κ, rate index + IG, dither, decision explanations | ✅ prototype |
+| Double-DQN comparator (SB3, Double-Q targets, best-on-validation) | ✅ prototype |
+| Metrics, exact replay, Turing replay, multi-seed benchmark with bootstrap CIs | ✅ prototype |
+| Ablations: flat vs learned prior, no information gain | ✅ prototype (in benchmark) |
+| FastAPI backend + Next.js demo (mission replay, benchmark) | ✅ prototype |
+| Learned association (real deinterleaving), expanded hypotheses (agile, aperiodic) | 🗺️ roadmap |
+| Residual RL + shield, index tuning (Optuna), Whittle index | 🗺️ roadmap |
+| Stratified statistics by period / occupancy | 🗺️ roadmap |
 | Multi-receiver, fusion, edge deployment, MLOps | 🗺️ roadmap |
 
 ---

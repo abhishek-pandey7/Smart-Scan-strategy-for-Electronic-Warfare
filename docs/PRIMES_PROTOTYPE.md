@@ -20,14 +20,15 @@ Side-by-side, same scenario, same truth:
 
 | In the prototype | Deferred to roadmap |
 |---|---|
-| Circular-scan periodic emitters (fixed frequency) + one hopping type + omni | Markov, aperiodic, full agility models |
+| Circular-scan periodic emitters (fixed, multi-frequency, hopping), omni, **intermittent on/off (Markov)** and pop-up emitters | Aperiodic / Poisson, full agility models |
 | Turing receiver replica: 36 centres, ±500 MHz, exact 2.15 s raster schedule | Wideband cueing receiver, multi-receiver |
 | **Ideal association:** detected pulses carry emitter IDs (upstream deinterleaver assumed) | PDW-noise association / DBSCAN / learned embeddings |
-| PRIMES-lite: periodic track model, undiscovered-cell belief, rate index + IG, dwell ∈ {10, 50} ms, search dither | Whittle index, expanded hypotheses, Optuna tuning |
-| Baselines: raster, random, greedy, oracle | Farey sweep, DQN comparator |
-| Core metrics, 10 seeds | Full stratified statistics, 30+ seeds, ablations |
-| Replay on 10 Turing `val_stare` scenarios | Full validation/test sweep, scan-mode cross-validation |
-| Streamlit live demo | Residual RL, shield, deployment |
+| **Learned priors** from 2,500 Turing training scenarios (HF API) | Empirical-Bayes refits from field logs |
+| PRIMES-lite: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
+| Baselines: raster, random, greedy bandit, oracle; **Double-DQN comparator** (SB3) | Farey sweep, residual RL + shield |
+| Core metrics, 10 seeds, bootstrap CIs; ablations (flat prior, no information gain) | Stratified statistics, 30+ seeds, per-track association ablation |
+| Replay on 11 Turing `val_stare` scenarios | Full validation/test sweep, scan-mode cross-validation |
+| FastAPI backend + **Next.js** demo (mission replay, benchmark) | Deployment, edge port |
 
 ---
 
@@ -47,14 +48,16 @@ flowchart LR
         PRM["PRIMES-lite"]
     end
     subgraph PRIMES["PRIMES-lite internals"]
-        TRK["Periodic track model"] --> IDX["Rate index + IG"]
-        UND["Undiscovered-cell belief"] --> IDX
+        PRI["Learned priors<br/>(22 discrete periods)"] --> TRK
+        TRK["Periodic + on/off track models"] --> IDX["Rate index + IG"]
+        UND["Undiscovered-cell belief<br/>learned visibility κ"] --> IDX
         IDX --> DIT["Search dither"]
     end
+    DQN["Double-DQN"]
     RX -- "look result<br/>(pulses by emitter)" --> POL
     POL -- "action<br/>(centre, dwell)" --> RX
     PRM --- PRIMES
-    RX --> LOG["Trace"] --> MET["Metrics"] --> UI["Streamlit demo"]
+    RX --> LOG["Trace"] --> MET["Metrics"] --> API["FastAPI"] --> UI["Next.js demo"]
 ```
 
 ---
@@ -168,21 +171,27 @@ for t in engagement:
 
 Reported as mean ± 95 % bootstrap CI over **10 seeds**.
 
-### 7. Turing replay (`primes/data/turing_replay.py`)
+### 7. Turing replay (`primes/data/turing.py`)
 
-- **Files:** stream 10 `val_stare/config_N.h5` files via the HF API and keep ToA, frequency and label only.
+- **Files:** 11 `val_stare/config_N.h5` files, fetched from the HF hub on first use into `data/raw/` (git-ignored).
 - **Flashes:** split each emitter's pulses into flashes at gaps > 50 ms.
 - **Truth:** the receiver model receives stare pulses inside `(|f − centre| ≤ 500 MHz, [t, t + d])`.
 - **Raster reference (measured on 11 files):** 6.3 % of narrow flashes with ≥ 3 pulses intercepted; 11.5 % of all flashes. About 80 % of sub-50 ms stare flashes have only 1–2 pulses, so they are excluded from the interceptable denominator.
 - **Policies:** all run on identical truth, and results sit alongside the simulated scenarios.
 
-### 8. Demo UI (`app/demo.py`, Streamlit + Plotly)
+### 8. Backend and demo (`api/main.py`, `web/`)
 
-1. **Controls:** scenario selector, policy A vs policy B, seed, playback speed.
-2. **Spectrum-time panel:** x = time, y = dwell centre. True flashes shown faint; receiver dwells as bars, hits highlighted. One row per policy.
-3. **Track panel:** each PRIMES track's estimated period vs true period, converging over time.
-4. **Live metrics:** interception ratio, emitters discovered, TTFI, prediction accuracy, as running curves for both policies.
-5. **Decision explanation:** the latest PRIMES action with its index terms.
+**FastAPI:** `GET /api/catalog` (scenarios, policies), `POST /api/runs` (replay the requested policies on identical truth, cache to disk), `GET /api/runs/{id}`, `GET /api/benchmark`.
+
+**Next.js — Mission replay page:**
+1. **Controls:** scenario, seed, scheduler A vs B, detection probability; shareable auto-run links (`?scenario=lockout&a=raster&b=primes&autorun=1`).
+2. **Stat tiles:** flashes intercepted, emitters discovered, mean time to first intercept, next-flash predictions correct, for both schedulers.
+3. **Spectrum-time canvas per scheduler:** x = time, y = frequency. Truth flashes as grey ticks, receiver dwells as shaded bands, intercepts as dots; hover shows each look.
+4. **Timelines:** flashes intercepted and emitters discovered over time, with crosshair tooltips.
+5. **"Why PRIMES looked there":** the decision at the playback cursor with its exploit / discovery / information-gain terms and the tracked emitter's predicted next flash.
+6. **"What PRIMES has learned":** estimated vs true period per emitter, updating as flashes are caught.
+
+**Benchmark page:** per-scenario interval plots (mean, 95 % bootstrap CI) for every scheduler and metric, plus a table.
 
 Runs are precomputed by replay, then animated with a time slider, so the demo is deterministic and fast.
 
@@ -192,15 +201,19 @@ Runs are precomputed by replay, then animated with a time slider, so the demo is
 
 ```
 primes/
-  core/types.py
-  env/scenario.py  receiver.py
-  policies/baselines.py  primes_lite.py
-  eval/replay.py  metrics.py
-  data/turing_replay.py
-app/demo.py
-configs/scenarios.yaml
-tests/test_receiver.py  test_tracks.py  test_index.py  test_replay.py
-scripts/inspect_turing_dataset.py   # existing
+  core/types.py                     receiver constants, Look / Truth types, flash splitting
+  env/scenarios.py  receiver.py     scenario families, receiver model
+  data/fit_priors.py  priors.py  turing.py
+  assets/priors.json                learned priors (committed)
+  predict/track.py  markov.py  search.py
+  policies/baselines.py  primes_lite.py  dqn.py
+  rl/env.py  features.py  double_dqn.py  train_dqn.py
+  eval/replay.py  metrics.py  serialize.py  runner.py
+api/main.py
+experiments/benchmark.py
+web/                                Next.js app
+tests/test_core.py  test_primes.py
+scripts/inspect_turing_dataset.py
 ```
 
 ---
@@ -214,7 +227,8 @@ scripts/inspect_turing_dataset.py   # existing
 | 3 | track model | recovers true `T` within 1 % after ≤ 3 flashes on `easy` |
 | 4 | undiscovered belief + index + dither → PRIMES-lite | beats raster and greedy on interception ratio (`easy`, `dense`) and breaks `lockout` |
 | 5 | `popup` + Turing replay on 10 files | lower new-emitter latency; results on real scenarios |
-| 6 | Streamlit demo | side-by-side playback of all scenarios |
+| 6 | FastAPI + Next.js demo | side-by-side playback of all scenarios |
+| 7 | Double-DQN comparator + multi-seed benchmark | fair ML rival; confidence intervals |
 
 ## Acceptance criteria for the demo
 
@@ -226,8 +240,9 @@ scripts/inspect_turing_dataset.py   # existing
 ## Run
 
 ```bash
-pip install -r requirements.txt           # numpy, h5py, huggingface_hub, streamlit, plotly, pytest
+pip install -r requirements.txt
 pytest -q
-python -m primes.eval.replay --scenario lockout --policies raster primes_lite --seeds 10
-streamlit run app/demo.py
+python -m experiments.benchmark --seeds 10 --workers 6     # artifacts/benchmark.json
+uvicorn api.main:app --port 8000
+cd web && npm install && npm run dev                        # http://localhost:3000
 ```
