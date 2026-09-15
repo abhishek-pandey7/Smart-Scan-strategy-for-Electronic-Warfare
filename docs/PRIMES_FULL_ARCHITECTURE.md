@@ -209,7 +209,7 @@ The shield bounds how far `I^final` may diverge from the analytic choice.
 **Physics of the gain (estimates):**
 - **Search:** per unit of receiver time, a dwell of length `d` catches an unknown-phase flash at rate `(d + w) / (T·(d + τ))`. With `w` = 14 ms and `τ` = 1 ms, 10 ms dwells search ~**2×** more efficiently than 100 ms dwells.
 - **Tracking:** once a track is locked, interception of its flashes approaches 100 % at ~0.6 % receiver-time cost.
-- **Measured (prototype, single seeds, before the multi-seed benchmark):** flash interception 0.7 % → 47 % on the lock-out scenario (raster → PRIMES), 15–17 % → 65–66 % on two real Turing scenarios, with PRIMES learning lock-out periods (2.150 s, 2.200 s) exactly and 97 % of its next-flash predictions correct.
+- **Measured (prototype benchmark, 10 seeds per family + 11 real Turing scenarios, 95 % bootstrap CIs):** flash interception raster → PRIMES: lock-out 1.0 % → 48.2 %, easy 5.6 % → 62.5 %, pop-up 5.8 % → 57.9 %, dense 9.9 % → 63.0 %, mixed 14.1 % → 80.7 %, **real Turing data 16.8 % → 63.0 %** (oracle upper bound 84.8 %). Double-DQN and the greedy bandit reach 15–21 %. PRIMES learns lock-out periods (2.150 s, 2.200 s) exactly; 82–97 % of its next-flash predictions on simulated periodic emitters are within 10 ms. Ablations: the learned prior is worth +24 points on `easy`; the information-gain term shows no measurable effect at this scale.
 
 ---
 

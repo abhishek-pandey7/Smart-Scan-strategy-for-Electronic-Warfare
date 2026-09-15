@@ -27,3 +27,8 @@ WORK_SPLIT.md
 # Generated
 artifacts/
 *.log
+
+# Keep the benchmark evidence, not the run cache or models
+!artifacts/
+artifacts/*
+!artifacts/benchmark.json

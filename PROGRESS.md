@@ -1,6 +1,6 @@
 # PRIMES — Progress
 
-_Last updated: 2026-09-15_
+_Last updated: 2026-09-15 (evening)_
 
 ## Status at a glance
 
@@ -10,34 +10,35 @@ _Last updated: 2026-09-15_
 | Learned emitter priors from Turing data | ✅ done |
 | Simulator, receiver model, baselines, replay, metrics | ✅ done, tested |
 | PRIMES-lite scheduler (the ML core) | ✅ working, tested; beats baselines in smoke tests |
-| Double-DQN comparator | 🟡 trained (2nd attempt); **held-out evaluation not yet run** |
+| Double-DQN comparator | ✅ trained and evaluated on held-out seeds (fair rival, on par with the greedy bandit) |
 | FastAPI backend | ✅ working |
-| Next.js frontend (replay + benchmark pages) | ✅ working; benchmark page waits for benchmark data |
-| Multi-seed benchmark with confidence intervals | ⏳ script ready, **not yet run** |
-| Docs corrections from new findings | ⏳ pending (see "Known issues") |
+| Next.js frontend (replay + benchmark pages) | ✅ working, both pages verified |
+| Multi-seed benchmark with confidence intervals | ✅ done: 488 runs, `artifacts/benchmark.json` |
+| Docs corrections from new findings | ✅ done |
 
 ## Where things are
 
 | What | Location |
 |---|---|
-| Full solution / PPT content (4 architecture views) | `docs/PRIMES_FULL_ARCHITECTURE.md` on branch `docs/architecture-and-prototype` |
-| Prototype scope doc | `docs/PRIMES_PROTOTYPE.md` on the same branch |
-| Dataset findings | `docs/DATASET_NOTES.md` (on `main`, more measurements on the docs branch) |
+| Full solution / PPT content (4 architecture views) | `docs/PRIMES_FULL_ARCHITECTURE.md` |
+| Prototype scope doc | `docs/PRIMES_PROTOTYPE.md` |
+| Dataset findings | `docs/DATASET_NOTES.md` |
+| Benchmark results (evidence) | `artifacts/benchmark.json`, shown on the web benchmark page |
 | Original plan | `PLAN.md` |
 | Code | stacked feature branches, see below |
 
 ### Branches (all pushed)
 
-Code branches are stacked, each built on the previous one, so merging `feature/web` brings in everything:
+Code branches are stacked, each built on the previous one. `feature/web` also contains the docs branch, so **one PR from `feature/web` into `main` brings in everything**:
 
 ```
 main
- ├─ docs/architecture-and-prototype   (docs only: full architecture, prototype scope, measurements)
+ ├─ docs/architecture-and-prototype   (merged into feature/web)
  └─ feature/prototype-core            receiver, scenarios, Turing loader, baselines, replay, metrics
      └─ feature/primes-lite           learned priors, PRIMES-lite scheduler, tests
          └─ feature/dqn               Gym environment, Double-DQN comparator
              └─ feature/api           FastAPI backend, benchmark script
-                 └─ feature/web       Next.js frontend, README, this file
+                 └─ feature/web       Next.js frontend, docs, benchmark results, README, this file
 ```
 
 ## What's been built
@@ -70,7 +71,7 @@ main
 ### 4. Double-DQN comparator (`primes/rl/`)
 - **Setup:** Gymnasium environment (validated), model-free features, reward matching PRIMES' objective, SB3 DQN with Double-Q targets.
 - **First run:** collapsed to a near-constant policy (unfair strawman), so it was discarded.
-- **Second run:** fixed 25 ms band selection, 5-step returns, 600k steps, best-on-validation checkpoint (validation reward 199). **Not yet evaluated on held-out seeds.**
+- **Second run:** fixed 25 ms band selection, 5-step returns, 600k steps, best-on-validation checkpoint (validation reward 199). On held-out seeds it performs on par with the greedy bandit (e.g. 20.7 % on `dense`) and is kept as the ML rival.
 
 ### 5. Backend and frontend
 - **API (`api/main.py`):** `/api/catalog`, `POST /api/runs` (replay + disk cache), `/api/runs/{id}`, `/api/benchmark`.
@@ -83,33 +84,43 @@ main
   - shareable auto-run links
 - **Web, benchmark page:** interval plots with 95 % confidence intervals, plus a table.
 
-## Results so far (single-seed smoke tests, not the final benchmark)
+## Benchmark results (10 seeds × 5 simulated families + 11 real Turing scenarios, 95 % bootstrap CIs)
 
-Flash interception ratio (higher is better):
+Flash interception ratio, mean (higher is better). Full table with CIs: web benchmark page or `artifacts/benchmark.json`.
 
-| Scenario | Raster (open-loop) | Greedy bandit | **PRIMES-lite** | Oracle (upper bound) |
-|---|---|---|---|---|
-| easy (seed 1) | 3.8 % | 19.2 % | **65.4 %** | 100 % |
-| lockout (seed 0) | 0.7 % (1/6 emitters found) | – | **46.7 %** (6/6 found, 97 % predictions correct) | – |
-| mixed (seed 1) | 15.1 % | 14.9 % | **78.3 %** | 93 % |
-| Turing config_192 (real) | 15.4 % | 19.3 % | **66.2 %** | 82.9 % |
-| Turing config_3 (real, 64 emitters) | 16.8 % | 4.6 % | **64.6 %** | 81.6 % |
+| Scenario | Raster (open-loop) | Greedy bandit | Double-DQN | **PRIMES** | Oracle (upper bound) |
+|---|---|---|---|---|---|
+| easy | 5.6 % | 14.4 % | 4.4 % | **62.5 %** | 96.1 % |
+| lock-out | 1.0 % | 7.6 % | 5.8 % | **48.2 %** | 98.3 % |
+| pop-up | 5.8 % | 10.8 % | 5.3 % | **57.9 %** | 97.6 % |
+| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **63.0 %** | 89.9 % |
+| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **80.7 %** | 94.3 % |
+| **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **63.0 %** | 84.8 % |
 
-- **Discovery and time to first intercept on real data:** PRIMES matches or beats raster (config_3: 62/64 vs 60/64 emitters found; mean first intercept 7.4 s vs 8.8 s).
-- **Lock-out:** raster catches **zero** flashes from every lock-out emitter. PRIMES learns their exact periods (2.150 s, 2.200 s) and intercepts them.
-- **Earlier code version** (before the learned κ; not yet re-run): dense 75.1 % vs raster 11.4 %; popup 24.6 % vs 5.7 %.
+PRIMES' 95 % intervals do not overlap any non-oracle rival's on any scenario family.
 
-These are single runs. Final claims must come from the multi-seed benchmark with confidence intervals.
+Other metrics:
+
+| Scenario | Emitters discovered: raster → PRIMES | Mean time to first intercept: raster → PRIMES | PRIMES next-flash predictions correct |
+|---|---|---|---|
+| easy | 68 % → 84 % | 36.9 s → 23.7 s | 82 % |
+| lock-out | 15 % → 92 % | 55.7 s → 24.2 s | 97 % |
+| pop-up | 57 % → 72 % (pop-up latency 25.0 s → 22.7 s) | 32.0 s → 24.5 s | 95 % |
+| dense | 76 % → 69 % | 27.6 s → 26.8 s | 96 % |
+| mixed | 87 % → 90 % | 18.9 s → 16.0 s | 92 % |
+| Turing (real) | 93 % → 87 % | 9.7 s → 10.3 s | 18 % (few flash-like emitters; see caveats) |
+
+**Ablations (what produces the gain):**
+- **Learned prior vs flat prior:** large effect on sparse periodic scenarios (`easy` 62.5 % vs 38.2 %, `pop-up` 57.9 % vs 45.8 %), neutral on dense / mixed / Turing where the on/off model and κ dominate.
+- **Information-gain term:** no measurable effect at this scale (all differences inside the CIs). Honest finding: the exploit + discovery terms already place looks well; IG is a candidate for removal or re-tuning.
+
+**Where PRIMES does not win:** on real Turing data and on `dense`, raster discovers slightly *more* emitters (93 % vs 87 %; 76 % vs 69 %) and reaches its first intercept about as fast. PRIMES trades a little breadth of search for 3.75× the flashes intercepted. Tuning `w_new` (the discovery weight) would move along this trade-off.
 
 ## Known issues and caveats
 
-1. **DQN not yet validated.** Its held-out evaluation hasn't run, and results may still be weak. A fair, working comparator is required before claiming "beats DQN".
-2. **Benchmark not yet run.** No confidence intervals exist yet.
-3. **Docs need corrections** on the docs branch:
-   - "~14 ms flash every ~4 s" must be labelled as metadata-derived, with the measured visibility added (median 32 % duty, 12 % flash-like).
-   - Add the learned-prior result (96.2 % on 22 periods).
-   - Update the prototype doc: Streamlit → FastAPI + Next.js; DQN and Markov model now in scope; learned κ.
-   - Update the full doc's status table and the results once the benchmark exists.
+1. **DQN is a modest rival.** It matches the greedy bandit but not more; a stronger model-free baseline (longer training, recurrent policy) would make the comparison harder to dismiss. What exists is fair: same reward, same environment, best-on-validation checkpoint, held-out seeds.
+2. **Discovery breadth on real data** is slightly below raster (see results). Tunable via `w_new`.
+3. **Information gain adds nothing measurable** in the current setup; keep it in the architecture story as an ablated component, not as a claimed source of gain.
 4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Real deinterleaving is roadmap.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
 6. **Runtime:** PRIMES takes 25–50 s per 30 s Turing scenario in Python. Fine for replay and demo (results are cached); not real-time yet.
@@ -117,12 +128,9 @@ These are single runs. Final claims must come from the multi-seed benchmark with
 
 ## Next steps
 
-1. Evaluate Double-DQN on held-out seeds. Retrain with the fixed validation set if still weak.
-2. Run the benchmark: `python -m experiments.benchmark --seeds 10 --workers 6`.
-3. Correct the docs with the new findings and benchmark numbers, then merge the docs branch.
-4. Check the frontend benchmark page and the light theme.
-5. Open the PR chain and merge into `main`.
-6. Optional: vectorise PRIMES across tracks for speed; tune λ and w_new on training seeds.
+1. Open one PR from `feature/web` into `main` (it contains every branch) and merge.
+2. Put the benchmark numbers and the ablation findings on the slides; the benchmark page screenshots well.
+3. Optional improvements: tune `w_new` / `λ` on training seeds (Optuna); vectorise PRIMES across tracks for speed; stronger DQN; real deinterleaving instead of ideal association.
 
 ## How to run
 
