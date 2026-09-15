@@ -1,0 +1,25 @@
+# Dataset (gated, ~70 GB) — never commit
+data/
+*.h5
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Experiment outputs
+runs/
+outputs/
+multirun/
+wandb/
+checkpoints/
+
+# Local-only
+WORK_SPLIT.md
+.env
+.vscode/
+.idea/
