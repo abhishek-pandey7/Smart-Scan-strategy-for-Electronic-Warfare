@@ -316,19 +316,21 @@ class Track:
             self.anchors[-1], self.anchor_sigma[-1] = anchor, sigma
         return new_flash
 
-    def miss(self, t: float, d: float, c: int) -> None:
+    def miss(self, t: float, d: float, c: int, p_d: float = P_D_MODEL) -> None:
+        """`p_d`: detection probability of this dwell length given the emitter is receivable; the
+        scheduler passes a calibrated value, so an unreliable short dwell is weak evidence of absence."""
         cover = self.cover[c]
         if cover <= 0:
             return
         p_mix = 0.0
         if len(self.T) and self.relevant(t, d):
-            p = self._flash_prob(t, np.array([d]))[:, 0] * cover * P_D_MODEL
+            p = self._flash_prob(t, np.array([d]))[:, 0] * cover * p_d
             p_mix = float(_softmax(self.logw) @ p)
             if p.max() > 0:
                 self.logw = self.logw + np.log(np.maximum(1.0 - p, MISS_FLOOR))
                 self._prune()
-        if self.markov is not None:
-            p_markov_miss = self.markov.observe(t, False, P_D_MODEL * cover)
+        if self.markov is not None and d >= self.min_overlap * 1.2 + 1e-4:
+            p_markov_miss = self.markov.observe(t, False, p_d * cover)
             self.log_odds_markov += np.log(max(p_markov_miss, MISS_FLOOR)) - np.log(max(1.0 - p_mix, MISS_FLOOR))
 
     # ------------------------------------------------------------------ prediction
@@ -344,7 +346,9 @@ class Track:
         rows, wts = [self._flash_prob(t, dwells) * P_D_MODEL], [_softmax(self.logw) * (1 - pm)]
         n_per = len(self.T)
         if self.markov is not None:
-            rows.append(P_D_MODEL * self.markov.belief_matrix(t + dwells / 2))
+            # a dwell can only confirm an on emitter if it is long enough to hold N_MIN_PULSES of it
+            feasible = (dwells >= self.min_overlap * 1.2 + 1e-4).astype(float)
+            rows.append(P_D_MODEL * self.markov.belief_matrix(t + dwells / 2) * feasible[None, :])
             wts.append(self.markov.weights * pm)
         P, w = np.vstack(rows), np.concatenate(wts)
         mean = w @ P

@@ -124,6 +124,10 @@ Other metrics:
 - **Faster revisits (0.25–0.5 s) for intermittent emitters.** PRIMES camps on already-visible emitters instead of searching: Turing 74 % → 56 %, dense 70 % → 52 % on tuning scenarios. Rejected; the knob exists, default unchanged.
 - **Lowering the undiscovered-emitter count by one per discovery.** Statistically invalid for a Poisson count, and measured worse (easy 65.5 % → 57.6 %). Reverted.
 
+- **Shorter search dwells (5 ms, 3 ms), with a realistic 0.5 ms retune time.** Helps periodic scenarios (lock-out 60 % → 64 %, all emitters found more often) but hurts intermittent ones (mixed 80 % → 49 %) because a very short look is an unreliable test of a bursty emitter. Net: 65.9 % → 57.4 % mean on tuning scenarios (5 seeds). Left off; `dwells_s` is configurable.
+- **Online per-dwell detection calibration** (observed vs predicted detections, per dwell length). No measurable effect at 5 seeds (65.6 % vs 65.9 %); an apparent +1.6 points at 3 seeds was noise. Left off (`calibrate_dwells`).
+- Kept from that round: the on/off model now ignores dwells too short to hold the 3 pulses a detection needs (principled; no measurable change at the default dwell lengths), and the benchmark now reports **acquisition loss** and **tracked-flash capture** separately.
+
 **Where PRIMES does not win:** on `dense` (and marginally on real data) raster discovers slightly *more* emitters (76 % vs 69 %; 93 % vs 91 %) at the same time-to-first-intercept. PRIMES trades a little breadth of search for 3.8× the flashes intercepted. `w_new` moves along this trade-off.
 
 ## Known issues and caveats

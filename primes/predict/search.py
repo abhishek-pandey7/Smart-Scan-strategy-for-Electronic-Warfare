@@ -26,7 +26,9 @@ MAX_P_DETECT = 0.9
 
 
 class UndiscoveredBelief:
-    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05, use_freq_prior: bool = False):
+    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05, use_freq_prior: bool = False,
+                 dwells_s=DWELL_OPTIONS_S):
+        self.dwells_s = np.asarray(dwells_s, dtype=float)
         # The learned frequency density (78 % of emitters in 12 of 72 cells) is available but off by
         # default: within a 30-60 s engagement it over-focuses search on the hot bands and starves the
         # rest (measured: Turing discovery +4 pts but interception -3 pts). Kept as an ablation.
@@ -34,7 +36,7 @@ class UndiscoveredBelief:
         self.m = VISIBLE_FRACTION * priors.emitters_per_scenario * density
         self.rho = popup_rate_per_s * density
         self.cover = (np.abs(CELL_CENTRES_MHZ[None, :] - CENTRES_MHZ[:, None]) < ACCEPT_HALF_WIDTH_MHZ).astype(float)
-        self.p_prior = np.array([priors.p_detect_search(d) for d in DWELL_OPTIONS_S])
+        self.p_prior = np.array([priors.p_detect_search(d) for d in self.dwells_s])
         self.discoveries = 0.0
         self.exposure = 0.0
         self.t = 0.0
@@ -56,7 +58,7 @@ class UndiscoveredBelief:
         covered cells. Undiscovered emitters are a Poisson count, so a discovery does *not* lower the
         expected number still hidden (independent increments); subtracting one per discovery was tried
         and measured worse (easy 65.5% -> 57.6%). Only the look-based thinning is a valid update."""
-        prior_p = float(np.interp(dwell_s, DWELL_OPTIONS_S, self.p_prior))
+        prior_p = float(np.interp(dwell_s, self.dwells_s, self.p_prior))
         in_cover = float(self.cover[centre] @ self.m)
         self.exposure += in_cover * prior_p
         self.discoveries += len(new_freqs_mhz)
