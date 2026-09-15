@@ -21,7 +21,12 @@ class PrimesLite(Policy):
 
     def __init__(self, lam: float = 0.3, w_new: float = 2.0, stale_s: float = 2.0, retune_s: float = 0.0,
                  search_threshold: float = 0.15, dither: float = 0.10, priors: Priors | None = None,
-                 use_info_gain: bool = True, use_dither: bool = True, name: str | None = None):
+                 use_info_gain: bool = True, use_dither: bool = True, use_freq_prior: bool = False,
+                 stale_intermittent_s: float | None = None, name: str | None = None):
+        self.use_freq_prior = use_freq_prior
+        # Revisit interval for on/off emitters. Shorter values (0.25-0.5 s) were tested and make PRIMES
+        # camp on visible emitters instead of searching (Turing interception 74% -> 56%); keep = stale_s.
+        self.stale_intermittent_s = stale_s if stale_intermittent_s is None else stale_intermittent_s
         self.lam, self.w_new, self.stale_s, self.retune_s = lam, w_new, stale_s, retune_s
         self.search_threshold, self.dither = search_threshold, dither
         self.priors_override = priors
@@ -33,7 +38,7 @@ class PrimesLite(Policy):
         super().reset(ctx)
         self.priors = self.priors_override or ctx.priors
         self.tracks: dict[int, Track] = {}
-        self.search = UndiscoveredBelief(self.priors)
+        self.search = UndiscoveredBelief(self.priors, use_freq_prior=self.use_freq_prior)
         self.look_t: list[float] = []
         self.look_d: list[float] = []
         self.look_c: list[int] = []
@@ -59,7 +64,8 @@ class PrimesLite(Policy):
             if not tr.relevant(t, horizon):
                 continue
             p, v, ig = tr.action_terms(t, self.dwells, self.ctx.horizon_s)
-            g = min(1.0, (t - tr.last_hit) / self.stale_s)
+            stale = self.stale_s if tr.model == "periodic" else self.stale_intermittent_s
+            g = min(1.0, (t - tr.last_hit) / stale)
             exploit += np.outer(tr.cover, g * v)
             info += np.outer(tr.cover, ig)
             if p.max() * g > best_p:
@@ -103,7 +109,9 @@ class PrimesLite(Policy):
     def update(self, look: Look) -> None:
         a = look.action
         detected = frozenset(e for e in look.detections if e >= 0)
-        self.search.observe(a.centre, a.dwell_s, new_emitters=sum(1 for e in detected if e not in self.tracks))
+        new_freqs = [float(np.median(look.freqs[e])) if e in look.freqs else float(CENTRES_MHZ[a.centre])
+                     for e in detected if e not in self.tracks]
+        self.search.observe(a.centre, a.dwell_s, new_freqs)
 
         idx = len(self.look_t)
         self.look_t.append(look.t)

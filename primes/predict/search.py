@@ -26,9 +26,13 @@ MAX_P_DETECT = 0.9
 
 
 class UndiscoveredBelief:
-    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05):
-        self.m = np.full(N_CELLS, VISIBLE_FRACTION * priors.emitters_per_scenario / N_CELLS)
-        self.rho = popup_rate_per_s / N_CELLS
+    def __init__(self, priors: Priors, popup_rate_per_s: float = 0.05, use_freq_prior: bool = False):
+        # The learned frequency density (78 % of emitters in 12 of 72 cells) is available but off by
+        # default: within a 30-60 s engagement it over-focuses search on the hot bands and starves the
+        # rest (measured: Turing discovery +4 pts but interception -3 pts). Kept as an ablation.
+        density = priors.cell_density(N_CELLS) if use_freq_prior else np.full(N_CELLS, 1.0 / N_CELLS)
+        self.m = VISIBLE_FRACTION * priors.emitters_per_scenario * density
+        self.rho = popup_rate_per_s * density
         self.cover = (np.abs(CELL_CENTRES_MHZ[None, :] - CENTRES_MHZ[:, None]) < ACCEPT_HALF_WIDTH_MHZ).astype(float)
         self.p_prior = np.array([priors.p_detect_search(d) for d in DWELL_OPTIONS_S])
         self.discoveries = 0.0
@@ -47,12 +51,15 @@ class UndiscoveredBelief:
         self.m += self.rho * max(t - self.t, 0.0)
         self.t = t
 
-    def observe(self, centre: int, dwell_s: float, new_emitters: int) -> None:
-        """Update after a look: learn kappa from discoveries, then thin undiscovered emitters in its cells."""
+    def observe(self, centre: int, dwell_s: float, new_freqs_mhz: list[float]) -> None:
+        """Update after a look: learn kappa from discoveries, then thin the undiscovered mass in the
+        covered cells. Undiscovered emitters are a Poisson count, so a discovery does *not* lower the
+        expected number still hidden (independent increments); subtracting one per discovery was tried
+        and measured worse (easy 65.5% -> 57.6%). Only the look-based thinning is a valid update."""
         prior_p = float(np.interp(dwell_s, DWELL_OPTIONS_S, self.p_prior))
         in_cover = float(self.cover[centre] @ self.m)
         self.exposure += in_cover * prior_p
-        self.discoveries += new_emitters
+        self.discoveries += len(new_freqs_mhz)
         p = min(prior_p * self.kappa, MAX_P_DETECT)
         self.m *= 1.0 - p * self.cover[centre]
 
