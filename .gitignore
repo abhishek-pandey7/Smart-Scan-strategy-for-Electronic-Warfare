@@ -1,5 +1,5 @@
 # Dataset (gated, ~70 GB) — never commit
-data/
+/data/
 *.h5
 
 # Python
@@ -23,3 +23,7 @@ WORK_SPLIT.md
 .env
 .vscode/
 .idea/
+
+# Generated
+artifacts/
+*.log

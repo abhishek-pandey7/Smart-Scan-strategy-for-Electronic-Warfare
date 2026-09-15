@@ -1,0 +1,10 @@
+numpy>=2.0
+scipy>=1.11
+h5py>=3.10
+huggingface_hub>=0.30
+gymnasium>=1.0
+stable-baselines3>=2.3
+torch>=2.3
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pytest>=8.0
