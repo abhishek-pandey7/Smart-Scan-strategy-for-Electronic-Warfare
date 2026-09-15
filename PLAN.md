@@ -58,9 +58,11 @@ Net: near-optimal control with worst-case protection and interpretability (index
 
 **Why the truth tensor matters:** because the scheduler only consumes what it looks at, *any* policy can be replayed exactly against a stored truth tensor. That gives **exact off-policy evaluation** — no importance weighting, no re-simulation — so all policies are compared on identical environments.
 
-**External dataset** — `alan-turing-institute/turing-synthetic-radar-dataset` (Apache-2.0, gated, 70 GB; we pull a subset):
-- **Stare Mode** is an oracle receiver over 0.5–18 GHz for 30 s → collapse its PDWs into our `(band × slot)` truth tensor. Free, realistic, externally-authored ground truth with up to 110 emitters and 68 transmitter types.
-- **Scan Mode** is literally an open-loop sweep (0.5–18 GHz in 500 MHz steps, 500 MHz IBW, deterministic varying dwell) over the *same* scenarios → a published open-loop baseline we did not tune.
+**External dataset** — `alan-turing-institute/turing-synthetic-radar-dataset` (Apache-2.0, gated, 70 GB; we pull a subset). Verified findings are in [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md).
+- **Stare Mode** is an oracle receiver over 0.5–18 GHz for 30 s. It supplies ground truth: per-pulse emitter labels, plus full per-emitter metadata (scan type, rate, beamwidth, hop set, PRI mode). Replay is done **at pulse level** (exact), and a 1 ms `(band × slot)` tensor is derived for the learning models.
+- **Scan Mode** is a fixed open-loop sweep over the *same* scenarios: 36 dwell centres at 500 MHz spacing, **±500 MHz acceptance, so adjacent dwells overlap by 50 %**, and one 2.15 s cycle identical in every file. This is a published open-loop baseline we did not tune. Scan files are *independent stochastic realisations*, not filtered copies of the stare files, so validation compares statistics, not individual pulses.
+- **Action space follows the dataset:** 36 overlapping dwell centres, making the arms correlated. The index layer selects by *marginal coverage gain*, not by independent per-arm indices. Dwell length is part of the action (e.g. {10, 25, 50, 100} ms), because the median illumination flash is ~14 ms against 50–100 ms open-loop dwells.
+- **Simulator priors:** emitter parameter distributions are fitted from `train_scan` metadata (4.9 GB), so the 49 GB `train_stare` split is never downloaded. The scheduler itself never sees this metadata at run time; it still starts with no prior intelligence.
 - Note: this dataset is built for *deinterleaving*, not scheduling. We use it only as an environment/validation source. `JC Wise, Radar Emitter Database` (radars.org.uk) is used, if accessible, only to sanity-check emitter parameter distributions.
 
 ---
