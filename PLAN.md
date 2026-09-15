@@ -1,69 +1,173 @@
 # Smart Scan Strategy for Electronic Warfare — PRIMES
 
+**P**redictive **R**estless **I**ndex for **M**ultiband **E**lectronic **S**upport
+
 ## Context
 
-The project directory `E:\projects\Smart Scan strategy for Electronic Warfare` is empty. This is a greenfield research build.
+An Electronic Support (ES) receiver must maintain surveillance over 0.5–18 GHz with an instantaneous bandwidth far narrower than the band it covers, so it has to sweep. Classical practice is **open-loop**: a periodic sweep driven by pre-mission intelligence and tuned for raw speed. It fails in two ways:
 
-**The problem.** An Electronic Support (ES) receiver must maintain surveillance over a wide RF spectrum (0.5–18 GHz) using an instantaneous bandwidth an order of magnitude smaller. It must therefore sweep. Classical practice is *open-loop*: a pre-mission, prior-intelligence-driven periodic sweep, tuned for raw speed. Two failure modes follow:
+1. It spends equal time on silent or benign bands as on new or threatening ones.
+2. A periodic sweep against a periodic emitter can **synchronise**. When sweep and scan periods are commensurate the emitter is never intercepted. When they are near-commensurate it is intercepted only on a very slow beat (Clarkson's lock-out result). Sweeping faster does not fix this and can cause it.
 
-1. It spends equal time on silent/benign bands and on new or threatening ones.
-2. A periodic sweep against a periodic emitter can **synchronise** — when sweep period and emitter scan period are commensurate the emitter is *never* intercepted (Clarkson's lock-out result). Raw speed does not fix this; it can cause it.
+The problem statement removes the crutch: **no prior reliable intelligence** on emitters. The scheduler must discover each emitter's temporal behaviour from its own hits and misses and exploit it to minimise intercept time and maximise interception ratio.
 
-The problem statement removes the crutch: **no prior reliable intelligence** on emitters or their characteristics. So the scheduler must simultaneously (a) discover each band's temporal structure from its own hits and misses and (b) exploit that structure to minimise intercept time and maximise interception ratio — a two-dimensional (frequency × time) search that is really an *active learning* problem, not a sweep-optimisation problem.
-
-**Intended outcome.** A machine-learning ES receiver scheduler that beats open-loop and standard DRL baselines on time-to-first-intercept and interception ratio, backed by a reproducible experiment harness reporting every figure of merit the problem statement names, validated against an external published dataset.
+**Intended outcome:** a machine-learning ES scheduler that beats open-loop, greedy and DQN baselines on time-to-first-intercept and interception ratio. It comes with a reproducible harness reporting every figure of merit the problem statement names, is validated against the Turing Synthetic Radar Dataset, and uses ablations to show which component produces the gain.
 
 ---
 
-## Why this approach (research verdict)
+## Design principle
 
-I surveyed the alternatives; the short version of the trade study:
+> **Do not use machine learning to rediscover everything from scratch when part of the problem can be modelled explicitly.**
 
-| Family | Verdict |
+Our dataset analysis ([`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md)) makes this concrete. The median emitter is a **~14 ms main-beam flash every ~4 s**, so a 30 s engagement yields about 7 flashes, and the scheduler must learn from the first 2–3. Model-free deep RL cannot do that. An explicit, Bayesian model of flash timing can. RL is therefore the **residual optimisation layer**, not the foundation.
+
+### Why this approach (research verdict)
+
+| Family | Role in PRIMES |
 |---|---|
-| Open-loop periodic / Farey-optimised sweep (Clarkson 2011) | Optimal *only* with a known threat list. Becomes our strongest classical baseline, not our answer. |
-| Myopic / greedy on a belief state | Cheap, but greedy on a 2-state Markov belief cannot represent *phase* of a periodic scanner; under-explores. |
-| Restless Multi-Armed Bandit + Whittle index (Liu & Zhao) | Provably near-optimal, O(N log N), interpretable, robust to model mismatch. **Right control layer** — but the standard version assumes a Gilbert–Elliott channel, which is the wrong emitter model. |
-| Plain Double-DQN scheduler (the current IEEE state of the art) | Model-free, learns *something*, but sample-hungry, opaque to an operator, no worst-case guarantee, and it must rediscover periodicity from scratch in every scenario. **This is the bar to beat.** |
-| POMDP solvers | Exact but intractable at 32–64 bands. |
+| Open-loop periodic sweep; Farey/Diophantine-optimised sweep (Clarkson 2011) | Baselines, plus the analytic treatment of optimal periodic interception in the report |
+| Myopic / greedy on a belief state | Baseline. Cannot represent the phase of a periodic scanner. |
+| Restless multi-armed bandit, Whittle / marginal-productivity index (Liu & Zhao; PCL for imperfect binary feedback) | Theoretical backbone of the Index layer. The MVP uses a simpler rate index. |
+| Double-DQN scheduler (current published ML approach) | **ML comparator.** It is what PRIMES must beat. |
+| Residual deep RL (NeurWIN-style learned index correction) | Extension layer (Phase 6), bounded by a shield |
+| Full POMDP solvers | Intractable at 36 centres × many emitters. Not used. |
 
-**The gap nobody closes:** the observation record is *censored* — you only learn a band's state when you look at it, and a null look is itself informative. Estimating an emitter's scan period from sparse, censored, irregularly-spaced looks is the crux, and it is exactly the problem Clarkson & McKilliam solved with lattice-based ML period estimation for PRI. Nobody has plugged that into the scheduler's belief state.
+---
 
-**PRIMES** (*Predictive Restless Index for Multiband Electronic Support*) — a three-layer **Predict → Index → Learn** scheduler:
+## Architecture
 
-1. **Predict.** Per band, an online Bayesian hypothesis bank over temporal structure — `{silent, periodic-scan(T, duty, phase), staggered/agile, Gilbert–Elliott Markov, Poisson}` — updated on *censored* evidence (a look that saw nothing is a real likelihood term). Periodic hypotheses use a lattice line-search ML period estimator adapted to censored samples. Output: a calibrated posterior predictive `p_b(t)` = P(band b transmits in slot t) **plus its uncertainty**. This layer is what makes "no prior intelligence" survivable, and it directly produces the problem statement's *percentage of correct predictions* and *average intercept time error* metrics.
+```mermaid
+flowchart TD
+    OBS["Observe dwell<br/>(PDWs: ToA, freq, PW, AoA, amp)"] --> ASSOC["Associate pulses to emitter tracks<br/>(gate on AoA / freq / PW)"]
+    ASSOC --> POST["Update track posteriors<br/>(period T, phase φ, flash width w)<br/>interval-censored hits and misses"]
+    POST --> PRED["Predict p_b(t) and uncertainty<br/>for every cell"]
+    TIME["Time passes: unobserved cells evolve<br/>(undiscovered-emitter belief, pop-up hazard)"] --> PRED
+    PRED --> IDX["Index = value per unit receiver time<br/>(exploit + λ·information gain) / (dwell + retune)"]
+    IDX --> SEL["Select dwell centre and dwell length<br/>(anti-sync dither in search mode only)"]
+    SEL --> OBS
+    IDX -.-> RL["Later: residual RL correction ΔI<br/>(shielded)"]
+    RL -.-> SEL
+```
 
-2. **Index.** A Whittle / marginal-productivity index computed over that posterior predictive, with imperfect binary feedback (P_d < 1, P_fa > 0), threat weights, and retune costs. Decisions are O(N log N) and every decision comes with a scalar reason — an operator can ask "why band 12?" and get an answer. Standard RMAB indices assume Gilbert–Elliott; ours is indexed on a *predictive process*, which is the novel part.
+### Observe & associate
 
-3. **Learn.** Two learned components, both *bounded*:
-   - An **information-directed exploration bonus**: index = exploit value + λ · expected information gain about (T, phase). This is the key creative move — to intercept a periodic scanner quickly you must first place looks at maximally *informative* phases, then switch to exploitation. A DQN learns this only implicitly and slowly.
-   - A **residual policy** (small GRU, NeurWIN-style learned index correction) trained by deep RL to correct the analytic index where the hypothesis bank is mis-specified, behind a **shield** that provably clamps performance to never fall below the analytic policy.
+A dwell returns pulse descriptor words, not a bit. Pulses are associated to **emitter tracks** by gating on angle of arrival, frequency and pulse width. Unassociated singletons go to a clutter / false-alarm track.
 
-4. **Anti-synchronisation guarantee.** Golden-ratio / Farey-informed dither on tie-breaks, with a formal check that the realised look sequence is never commensurate with any candidate emitter period — the lock-out failure mode is designed out, not hoped away.
+This matters because bands are shared: validation scenarios average **51 emitters over 36 dwell centres**. A single periodic hypothesis per band breaks as soon as two periodic emitters share it. Each track gets its own temporal model, and cell-level prediction combines them.
 
-Net: near-optimal control with worst-case protection and interpretability (index policy), plus the adaptivity of deep RL (residual layer), plus an explicit answer to "how do you learn an emitter you've never seen" (censored-evidence predictor).
+- **MVP:** gating plus DBSCAN on (AoA, freq, PW).
+- **Extension:** a learned embedding such as the transformer metric-learning deinterleavers trained on the Turing dataset.
+
+### Predict
+
+**Hypothesis bank per track:**
+- periodic flash (circular scan)
+- continuous (omni)
+- Gilbert–Elliott Markov
+- frequency-agile (hop set spanning cells)
+- aperiodic / Poisson
+
+**Per cell:** an **undiscovered-emitter** belief.
+
+The MVP implements periodic plus undiscovered first, because that directly addresses the lock-out failure mode.
+
+**Periodic flash model.** Emitter `e` is illuminating us at time `t` iff `(t − φ) mod T < w`.
+
+**Interval-censored evidence** is used instead of per-slot hit/miss:
+- **A hit** gives flash-edge arrival times to sub-millisecond accuracy. Edges clipped by the dwell boundary are treated as censored.
+- **Two hits** at `t₁ < t₂` restrict the period to `T ∈ {(t₂ − t₁)/k : k = 1…K}` within the prior support. This generates the candidate `(T, φ)` set.
+- **A miss** of length `d` rules out, for every candidate, the phase interval of length `d + w`. Likelihood: `1 − P_d · 1[overlap]`.
+- **The posterior** is a weighted candidate set, pruned by weight. The research version refines `T` with Clarkson–McKilliam lattice ML period estimation over the associated hit times.
+- **Before the second hit,** the track is a mixture over the learned prior on `T`, so predictions are smooth rather than empty.
+
+**Undiscovered-emitter belief** `q_k` per 250 MHz cell:
+- It decreases after a miss, by the average detection chance under the prior over `(T, w)`.
+- It grows between looks with a pop-up hazard `ρ`: `q ← 1 − (1 − q)·e^{−ρΔt}`.
+- **Unobserved cells are therefore never frozen.** Starving a "silent" band makes it steadily more valuable to look at. This restless behaviour is what finds new emitters.
+
+**Cell prediction:**
+
+$$
+p_k(t) = 1 - (1 - q_k\,\bar p_{\text{new}}) \prod_{e \in \text{tracks}(k)} \big(1 - p_e(t)\big), \qquad p_e(t)=\sum_h w_h\, p_{e,h}(t)
+$$
+
+Uncertainty is carried by the hypothesis weights `w_h`, which tells PRIMES which cells are worth observing to learn, not only which are likely to transmit.
+
+**Learned priors (the MVP's trained component).** Priors over period, flash width, agility mode and emitter density are **fitted from the 2,500 `train_scan` scenarios** (metadata streamed via the HF API; see Environment & data). This is trained on data, speeds up learning from the first flashes, and is ablated (learned prior vs. flat prior). At run time the scheduler never sees scenario metadata, so it still starts with no intelligence about the emitters in front of it.
+
+### Index
+
+An action is `(dwell centre c, dwell length d)`, with `c` one of 36 centres at 500 MHz spacing covering ±500 MHz (so adjacent centres overlap by 50 %) and `d ∈ {10, 25, 50, 100} ms`. The receiver shares its time across bands, so the index is **value per unit of receiver time**:
+
+$$
+I(c,d) = \frac{\displaystyle\sum_{e \in \mathcal{E}(c)} W_e(t)\, P_e\big(\text{intercept in }[t, t+d]\big) \;+\; \sum_{k \in \mathcal{K}(c)} W_{\text{new}}\, q_k\, \bar P_{\text{det}}(d) \;+\; \lambda\, IG(c,d)}{d + \tau\,\mathbb{1}[c \neq c_{\text{prev}}]}
+$$
+
+- **Intercept probability** for a periodic hypothesis, with `u = (t − φ) mod T`: `P = P_d · 1[u < w_eff ∨ u > T − d_eff]`. Widths are shortened by the minimum pulse count needed for a detection. Averaged over the posterior.
+- **Overlap handling:** sums run over the **unique** tracks `𝓔(c)` and cells `𝓚(c)` a centre covers, so an emitter in an overlap region is never double-counted. With `K > 1` simultaneous receivers, centres are chosen greedily by marginal coverage gain (submodular, `1 − 1/e` guarantee).
+- **Staleness weight:** `W_e(t) = W_threat,e · g(time since last intercept of e)`, with `g` increasing. It rewards re-intercepting tracks that are going stale, and stops the scheduler farming one loud emitter.
+- **Information gain,** closed form for a binary intercept outcome `y`:
+
+$$
+IG = H\Big(\sum_h w_h\, p_h\Big) - \sum_h w_h\, H(p_h)
+$$
+
+  where `H` is binary entropy and `p_h = P(y = 1 | h)`. It peaks where hypotheses disagree. A hit carries timing information beyond a bit, so this is a conservative lower bound.
+- **Tuning:** `λ`, `ρ`, `τ` and the dwell set are tuned by Bayesian optimisation on training scenarios, never on validation or test.
+- **Explanation:** every decision is logged with its terms. For example: *"centre 3250 MHz, 25 ms: track 7 predicted flash in 12 ms (P = 0.81), staleness 3.2 s, IG 0.4 bits."*
+- **Research version:** replace the rate index with a Whittle / marginal-productivity index over the predictive process, check indexability numerically, and fall back to the PCL formulation for imperfect binary feedback.
+
+### Anti-synchronisation
+
+Once PRIMES tracks emitters, its look times are driven by predictions and it breaks synchronisation by itself. Lock-out risk returns in **search mode**: when beliefs are flat, the index ordering degenerates into a deterministic sweep. There, and only there, PRIMES dithers:
+- Choose among ε-near-tied actions using a golden-ratio low-discrepancy sequence.
+- Randomise the dwell start offset.
+- Assert that the realised search revisit interval is not near-commensurate with the period prior's support.
+
+### Learn (Phase 6, extension)
+
+$$
+I^{\text{final}}(c,d) = I^{\text{analytic}}(c,d) + \Delta I^{\text{RL}}(c,d)
+$$
+
+- **Residual policy:** a small GRU policy trained with PPO on randomised scenarios learns `ΔI`, only the part the explicit model misses.
+- **Shield:** clamps the combined policy so its value on the analytic objective never falls more than a set margin below the analytic choice.
+- **Evaluation:** on held-out scenario families.
+- **Benefits:** a working intelligent scheduler exists before any RL training; decisions stay explainable; and RL is judged against analytic PRIMES, not merely against open-loop sweeping.
 
 ---
 
 ## Environment & data
 
-**Simulator-first, dataset for external validation.**
+**Simulator-first.** The simulator (`primes/env/`) is the primary development environment. Its receiver defaults replicate the Turing Scan-Mode receiver, verified on all 250 `val_scan` files:
+- 36 dwell centres, 250–17750 MHz
+- acceptance `|f − centre| ≤ 500 MHz`
+- open-loop schedule: a 2.15 s cycle of 50 / 100 ms dwells repeating from t = 0
+- this model explains **99.987 %** of 22.7 M scan pulses
 
-**Simulator** (`primes/env/`) — the system model the problem statement asks for:
-- `N` bands (default 32; dataset-matched config: 35 × 500 MHz over 0.5–18 GHz), slot Δt (default 1 ms), horizon 30 s.
-- Receiver: tunes one band per slot (config extends to K simultaneous or a wideband/narrowband sensitivity trade), dwell = m slots, retune/settling penalty τ, sensitivity threshold.
-- Emitters: circular / sector / raster **spatial scan** (period `T_s`, illumination dwell `t_ill`), PRI (fixed / staggered / jittered), **frequency agility** (hop set + hop period), duty cycle; plus stochastic emitters via continuous-time Markov chain / Gilbert–Elliott, and aperiodic Poisson emitters.
-- Detection model: `P_d(SNR, dwell)` when illuminating ∧ in-band ∧ in-slot; `P_fa` per look. Both configurable — sensitivity is a swept parameter, not a constant.
-- **Truth tensor** `O[b, t] ∈ {0,1}` + emitter-id map, exported per scenario. This is the "truth information on status of emitters in each band and at each time slot" the statement requires.
+**Emitters:**
+- **Scan:** circular (period `T = 60/rpm`, flash width `w = T·beamwidth/360`) or omni.
+- **PRI:** fixed, staggered, jittered, sliding, switch-dwell.
+- **Frequency:** fixed, multi-simultaneous, hopping linear / sawtooth, random. Hopping emitters span 1–3 sub-bands.
+- **Stochastic:** Markov emitters and pop-up emitters appearing mid-engagement.
+- **Pulses:** generated with AoA, freq, PW and amplitude plus noise, so association is realistic.
 
-**Why the truth tensor matters:** because the scheduler only consumes what it looks at, *any* policy can be replayed exactly against a stored truth tensor. That gives **exact off-policy evaluation** — no importance weighting, no re-simulation — so all policies are compared on identical environments.
+**Detection:** main-beam only, sensitivity threshold, `P_d` and `P_fa` configurable and swept.
 
-**External dataset** — `alan-turing-institute/turing-synthetic-radar-dataset` (Apache-2.0, gated, 70 GB; we pull a subset). Verified findings are in [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md).
-- **Stare Mode** is an oracle receiver over 0.5–18 GHz for 30 s. It supplies ground truth: per-pulse emitter labels, plus full per-emitter metadata (scan type, rate, beamwidth, hop set, PRI mode). Replay is done **at pulse level** (exact), and a 1 ms `(band × slot)` tensor is derived for the learning models.
-- **Scan Mode** is a fixed open-loop sweep over the *same* scenarios: 36 dwell centres at 500 MHz spacing, **±500 MHz acceptance, so adjacent dwells overlap by 50 %**, and one 2.15 s cycle identical in every file. This is a published open-loop baseline we did not tune. Scan files are *independent stochastic realisations*, not filtered copies of the stare files, so validation compares statistics, not individual pulses.
-- **Action space follows the dataset:** 36 overlapping dwell centres, making the arms correlated. The index layer selects by *marginal coverage gain*, not by independent per-arm indices. Dwell length is part of the action (e.g. {10, 25, 50, 100} ms), because the median illumination flash is ~14 ms against 50–100 ms open-loop dwells.
-- **Simulator priors:** emitter parameter distributions are fitted from `train_scan` metadata (4.9 GB), so the 49 GB `train_stare` split is never downloaded. The scheduler itself never sees this metadata at run time; it still starts with no prior intelligence.
-- Note: this dataset is built for *deinterleaving*, not scheduling. We use it only as an environment/validation source. `JC Wise, Radar Emitter Database` (radars.org.uk) is used, if accessible, only to sanity-check emitter parameter distributions.
+**Truth:**
+- Exact **pulse-level** truth per emitter, used for replay and scoring. Flashes can be as short as 0.33 ms, so a coarse grid would be wrong.
+- A 1 ms `(cell × slot)` occupancy tensor derived from it, for learning models and plots.
+- The truth is hidden from schedulers. Any policy can be replayed exactly against stored truth: **exact off-policy evaluation**, identical environments for every policy.
+
+**Turing Synthetic Radar Dataset** (external validation):
+- **Stare files** provide ground-truth pulses and labels. **Scan files** provide the published open-loop baseline over the same scenarios.
+- Scan and stare files are **independent stochastic realisations**, so validation is statistical, never pulse-by-pulse.
+- A few pulses have ToA > 30 s; clip to `[0, 30]` s.
+
+**Data access:**
+- **Metadata** (for priors) is **streamed** through the HF API (`HfFileSystem` + `h5py`), about 1 s per file and a few KB each, with no bulk download.
+- **Pulse data** (for evaluation) is streamed **once** into a compact local cache in `data/cache/`: ToA, frequency and label per pulse, plus metadata. The cache rebuilds itself if deleted. Streaming pulses on every run would be ~20× slower than the local cache (measured) and risks rate limits.
+- Splits: `val_stare` / `val_scan` for development evaluation, `test_*` for held-out final numbers. `train_stare` (49 GB) is never needed.
 
 ---
 
@@ -71,84 +175,136 @@ Net: near-optimal control with worst-case protection and interpretability (index
 
 ```
 primes/
+  core/        types.py                       # TruthTensor, Look, Track, Policy / Predictor protocols
   env/         emitter.py  receiver.py  scenario.py  truth.py  gym_env.py
-  predict/     hypotheses.py  period_lattice.py  censored_bayes.py  calibration.py
-  index/       whittle.py  mp_index.py  info_gain.py  dither.py
-  policies/    baselines.py  myopic.py  thompson.py  primes.py  residual_rl.py
-  eval/        metrics.py  replay.py  bootstrap.py  plots.py
-  data/        turing_loader.py  to_truth_tensor.py
+  track/       association.py                 # PDW → emitter tracks
+  predict/     periodic.py  undiscovered.py  priors.py  hypotheses.py  calibration.py
+  index/       rate_index.py  info_gain.py  coverage.py  dither.py  whittle.py
+  policies/    baselines.py  oracle.py  dqn.py  primes.py  residual_rl.py
+  eval/        replay.py  metrics.py  bootstrap.py  plots.py
+  data/        turing_stream.py  turing_cache.py  fit_priors.py
 configs/       scenario_*.yaml  policy_*.yaml  experiment_*.yaml
-experiments/   run_sweep.py  ablations.py
+experiments/   run_sweep.py  ablations.py  tune_index.py
+scripts/       inspect_turing_dataset.py
+docs/          DATASET_NOTES.md
 tests/
 reports/       report.md  figures/
 ```
 
-Stack: Python 3.11, NumPy + Numba (hot loops), Gymnasium, Stable-Baselines3 (+ Ray RLlib for sweeps on cloud GPU), PyArrow/Polars for PDW ingest, Hydra for configs, pytest, matplotlib. Study `github.com/vtnsi/rfrl-gym` (MIT) for env-design patterns but do **not** depend on it — it does not model a partial-band scanning ES receiver.
+**Stack:** Python 3.12, NumPy + Numba, Gymnasium, Stable-Baselines3 (DQN, PPO), Optuna (index tuning), huggingface_hub + h5py, Hydra, pytest, matplotlib.
 
 ---
 
 ## Build phases
 
-**Phase 1 — Environment & truth (`primes/env/`)**
-Emitter/receiver/scenario models above; deterministic seeding; truth-tensor export; Gymnasium wrapper with observation = (last-look results per band, time-since-look per band, hit counts, slot phase) and action = band index. Scenario YAMLs: `easy` (few periodic emitters), `agile` (frequency-hopping), `adversarial` (periods chosen to lock-out a raster sweep), `dense` (dataset-matched, ~90 emitters).
+### Phase 1 — Environment and truth
+Emitter, receiver, scenario and detection models. Pulse-level truth with the derived 1 ms tensor. Gymnasium environment with action `(centre, dwell)`. Deterministic seeding and replay.
 
-**Phase 2 — Baselines & metrics (`policies/baselines.py`, `eval/`)**
-Raster sweep, random, Farey/Clarkson-optimised periodic, jittered periodic, round-robin-with-priority, myopic-greedy on Gilbert–Elliott belief, Thompson sampling, and a **clairvoyant oracle** (upper bound, sees the truth tensor). Metrics module implementing every figure of merit — see below. Bootstrap CIs, multi-seed. **Gate: replay harness reproduces each baseline's metrics deterministically.**
+Scenario families:
+- `easy`: few fixed-frequency circular scanners
+- `shared-band`: several periodic emitters per band
+- `agile`
+- `lockout-exact`: periods commensurate with the 2.15 s sweep
+- `lockout-near`: near-commensurate, slow beat
+- `popup`: emitters appear mid-run
+- `dense`: Turing-matched, ~50–100 emitters
 
-**Phase 3 — Predict layer (`primes/predict/`)**
-Hypothesis bank with censored-evidence likelihoods; lattice line-search ML period estimation over sparse censored look times; sequential Bayesian model selection; posterior predictive `p_b(t)` with uncertainty; reliability-diagram calibration. **Gate: on `easy`, recovers scan periods within tolerance from < 1 % duty-cycle observation, and its predictions are calibrated.**
+**Gate:** the simulator's raster sweep matches closed-form intercept-time results (Self 1985) for a single periodic emitter.
 
-**Phase 4 — Index layer (`primes/index/`)**
-Whittle/MP index over the predictive process with imperfect binary feedback; indexability check; information-gain bonus with a scheduled λ; anti-synchronisation dither with a commensurability assertion. **Gate: with λ=0 and γ→0 it provably reduces to the myopic policy (unit-tested); it beats every Phase-2 baseline on `easy`, `agile`, and — decisively — `adversarial`.**
+### Phase 2 — Baselines, metrics, replay
+- **Baselines:** random, round-robin, raster (exact Turing schedule), jittered raster, myopic greedy, and a **clairvoyant oracle** that reads truth (upper bound for regret).
+- **Metrics:** full metrics module (below) and bootstrap CIs over ≥ 30 seeds.
 
-**Phase 5 — Learn layer (`policies/residual_rl.py`)**
-GRU residual policy trained with PPO (and a NeurWIN-style learned index head) on randomised scenarios; shield that clamps the combined policy to the analytic index's guarantee. Also implement the **Double-DQN scheduler from the IEEE state of the art** as the ML comparator. Cloud-GPU sweeps over seeds and scenario families. **Gate: shielded PRIMES ≥ analytic PRIMES on every scenario; PRIMES > Double-DQN with non-overlapping bootstrap CIs; PRIMES generalises to held-out scenario families where Double-DQN degrades.**
+**Gate:** replay is bit-identical for identical seeds, and `lockout-exact` gives raster TTFI = ∞.
 
-**Phase 6 — Dataset validation (`primes/data/`)**
-Ingest a Turing Stare-Mode subset → truth tensors; replay all policies. Cross-validate our receiver model by replaying a raster sweep matched to the dataset's Scan-Mode configuration and checking our predicted hit statistics against the dataset's actual Scan-Mode PDW record. **Gate: our simulated open-loop sweep reproduces the dataset's independent scan-mode intercept statistics within CI — this validates the receiver model against a third-party simulator.**
+### Phase 3 — Predictive MVP
+- Association (gating + DBSCAN).
+- Periodic track posterior with interval-censored hits and misses, and candidate generation from hit differences.
+- Undiscovered-cell belief with pop-up hazard.
+- Priors fitted from `train_scan` metadata.
 
-**Phase 7 — Ablations & report (`experiments/`, `reports/`)**
-Ablate each layer (predict-only, index-only, no info-gain, no dither, no shield) to attribute the gain. Sweep sensitivity, P_fa, band count, emitter density, agility rate. Sections on *"approaches to intercept a periodic scan receiver optimally"* — the analytic Farey/Diophantine treatment set against what PRIMES learns, showing whether the learned policy rediscovers the number-theoretic optimum. Report maps 1:1 to the problem statement.
+**Gate:**
+- **Recovery:** period and phase recovered within tolerance after ≤ 3 flashes on `easy` and `shared-band`.
+- **Calibration:** calibrated `p_e(t)` (reliability diagram, Brier score).
+- **Priors:** the learned prior beats the flat prior on early-flash prediction error.
+
+### Phase 4 — Smart scheduling
+Rate index with information gain, overlap-aware coverage, staleness weights, dwell-length choice, and search-mode dither. `λ, ρ, τ` tuned with Optuna on training scenarios.
+
+- **Compared against:** every Phase-2 baseline **and a Double-DQN scheduler** (SB3, same Gymnasium environment, tuned fairly).
+- **Principal experiments:** `lockout-exact`, `lockout-near`, `popup`, `dense`.
+
+**Gate:** analytic PRIMES beats greedy and DQN on TTFI (mean and p95) and interception ratio, with non-overlapping CIs, and breaks both lock-out scenarios.
+
+### Phase 5 — Expanded predictor
+- **New hypotheses:** Gilbert–Elliott Markov, frequency-agile tracks spanning cells, aperiodic / Poisson, omni.
+- **Model selection:** Bayesian model selection across the hypothesis bank.
+- **Degradation mode:** long-period emitters (T ≥ 15 s, ≤ 2 flashes per window) fall back to the search prior.
+
+**Gate:** no regression on Phase-4 scenarios, and a gain on `agile` and on stochastic families.
+
+### Phase 6 — Residual RL
+GRU / PPO residual `ΔI` with shield, domain randomisation, and held-out scenario families.
+
+Expected ordering to test:
+
+$$
+\text{Open-loop} < \text{Greedy} < \text{DQN} \le \text{Analytic PRIMES} \le \text{PRIMES + RL residual}
+$$
+
+**Gate:** shielded PRIMES+RL ≥ analytic PRIMES on every family, and any improvement holds on held-out families.
+
+### Phase 7 — External validation, ablations, report
+- **Turing validation:** stream-once cache of `val_*` / `test_*`. Replay all policies on stare truth. Statistically cross-validate the simulated open-loop sweep against Turing Scan-Mode intercept statistics.
+- **Ablations:** no prediction · prediction without IG · flat vs. learned priors · no association (per-band model) · no undiscovered-cell hazard · no dither · no expanded hypothesis bank · analytic PRIMES · PRIMES + RL.
+- **Report:**
+  - Attribute the improvement to specific components.
+  - Include the Farey/Diophantine analysis of optimal periodic interception, and whether PRIMES approaches it.
+  - Map 1:1 to the problem statement's figures of merit.
 
 ---
 
 ## Figures of merit (`primes/eval/metrics.py`)
 
-Every metric the statement names, plus the ones needed to defend the result:
-
-- **Probability of detection / false alarm**, as functions of sensitivity and dwell (ROC per scenario).
-- **Sensitivity** — swept parameter; performance-vs-sensitivity curves.
-- **Average intercept rate** and **interception ratio** (fraction of emitter-active slots intercepted).
-- **Time to first intercept** per emitter — mean, median, **95th percentile and worst case** (the tail is what lock-out shows up in).
-- **Average reward / cost** under a configurable threat-weighted cost function.
-- **Percentage of correct predictions** — accuracy of the Predict layer's next-transmission calls.
-- **Average intercept time error** — |predicted − actual| next-transmission time.
-- **Regret vs. clairvoyant oracle**, and **coverage fairness** across emitters (so a policy cannot win by farming one loud emitter).
-- **New-emitter latency** — slots from an emitter first appearing to first intercept. Directly answers the statement's complaint that open-loop "loses time to non-threatening emitters".
+- **Detection:** probability of detection and false alarm, as functions of sensitivity and dwell (ROC).
+- **Sensitivity:** swept; performance-vs-sensitivity curves.
+- **Interception:** average intercept rate, and interception ratio (fraction of emitter flashes intercepted).
+- **Time to first intercept** per emitter: mean, median, **p95, worst case**.
+- **Reward:** average reward / cost under threat-weighted cost.
+- **Prediction:** **percentage of correct predictions** (next-flash calls) and **average intercept time error** (|predicted − actual| next flash).
+- **Optimality:** regret vs. clairvoyant oracle.
+- **Fairness:** coverage fairness across emitters.
+- **Responsiveness:** new-emitter latency (appearance → first intercept).
+- **Stratification:** all of the above broken down by period relative to the 30 s window and by band occupancy, so the long-period tail cannot hide in averages.
 
 ---
 
 ## Verification
 
-1. **Analytic cross-check** — for a single periodic emitter and a periodic sweep, the simulator's measured intercept-time statistics must match the closed-form results (Self 1985; Clarkson's synchronisation ratios). Unit test.
-2. **Lock-out reproduction** — construct a scenario where a raster sweep provably never intercepts; assert raster TTFI = ∞ and PRIMES TTFI is finite. Unit test.
-3. **Replay determinism** — same policy + same truth tensor + same seed ⇒ bit-identical metrics.
-4. **Reduction tests** — index layer with λ=0, γ→0 equals myopic; shield never underperforms the analytic policy on any seed.
-5. **Calibration** — Predict layer reliability diagrams; Brier score against truth.
-6. **External validation** — Phase 6 gate: our open-loop sweep reproduces the Turing Scan-Mode intercept statistics.
-7. **Statistical rigour** — every headline number over ≥ 30 seeds with bootstrap CIs; no claim made on overlapping intervals.
-8. **End-to-end** — `python experiments/run_sweep.py --config configs/experiment_full.yaml` regenerates every figure in `reports/` from scratch.
+1. **Analytic cross-check:** simulated intercept-time statistics match Self (1985) and Clarkson synchronisation ratios for a single periodic emitter against a periodic sweep.
+2. **Lock-out:** raster TTFI = ∞ on `lockout-exact` and slow-beat on `lockout-near`; PRIMES TTFI is finite and short on both.
+3. **Receiver model:** the simulated Turing schedule reproduces the 2.15 s / ±500 MHz acceptance behaviour (already verified on the dataset at 99.987 %).
+4. **Replay determinism:** same policy + truth + seed ⇒ bit-identical metrics.
+5. **Predictor unit tests:**
+   - candidate generation recovers the true `T` from two synthetic hits
+   - misses eliminate the right phase intervals
+   - the IG closed form matches Monte-Carlo mutual information
+6. **Association:** purity / V-measure on simulated shared-band scenarios.
+7. **Calibration:** reliability diagrams and Brier score for `p_e(t)`.
+8. **Shield:** PRIMES+RL never falls below the analytic policy by more than the margin on any seed.
+9. **Statistics:** headline numbers over ≥ 30 seeds with bootstrap CIs; no claims on overlapping intervals.
+10. **End to end:** `python experiments/run_sweep.py --config configs/experiment_full.yaml` regenerates every figure in `reports/`.
 
 ---
 
 ## Risks
 
-- **Dataset is gated and 70 GB.** Needs HF access acceptance; we pull a subset. Mitigated by simulator-first ordering — Phases 1–5 do not block on it.
-- **It is a deinterleaving dataset, not a scheduling one.** Handled explicitly: used as an environment/validation source only, and stated as such in the report.
-- **Whittle indexability may fail** for some predictive processes. Mitigation: numerical indexability check per configuration; fall back to the MP-index (PCL) formulation, which is exactly the framework built for imperfect binary feedback.
-- **Residual RL could overfit** to simulated scenario families. Mitigation: held-out scenario families, domain randomisation, and the shield bounds the downside.
-
-## Open items for later (not blocking)
-
-- Multi-receiver / cooperative scheduling (multi-agent extension).
-- Real-time latency benchmarking and an ONNX inference path — deferred per the research-grade decision, but the index layer is already O(N log N) and would port cleanly.
+| Risk | Mitigation |
+|---|---|
+| Association errors merge or split emitters | Gate on AoA + freq + PW; clutter track; ablate against a truth-association oracle to bound the loss |
+| Long-period emitters (≥ 15 s) give too few flashes to learn | Search-prior fallback; stratified metrics make the limitation explicit |
+| "Is it ML?" before RL exists | Learned priors from 2,500 scenarios and a trained DQN comparator in Phase 4; residual RL in Phase 6 |
+| Whittle indexability fails for the predictive process | The rate index is the MVP; numerical indexability check; PCL / marginal-productivity fallback |
+| Residual RL overfits simulated families | Held-out families, domain randomisation, shield |
+| HF streaming slow or rate-limited | Stream metadata only; stream pulses once into a local cache |
+| The Turing dataset is built for deinterleaving, not scheduling | Used only for environment realism, priors and statistical validation; stated as such in the report |
