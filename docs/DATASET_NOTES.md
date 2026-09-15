@@ -48,6 +48,23 @@ stare/{train_stare,val_stare,test_stare}/config_N.h5  49.2 / 4.9 / 5.7 GB
 - **Detection:** only pulses from the main beam reach the receiver (sidelobes are not modelled or fall below sensitivity). An emitter is therefore visible only as a short **flash** once per scan period.
 - **Open-loop scan coverage:** in the median scenario, 74 % of listed emitters produce at least one scan-mode pulse (p10 67 %, min 47 %). *Caveat:* the denominator includes emitters invisible even to the stare receiver. The true open-loop miss rate needs the paired stare files.
 
+## Open-loop raster performance on stare truth (measured)
+
+The exact Turing raster schedule was replayed against stare-mode truth for 11 `val_stare` scenarios: `config_192` plus 10 random configs with a fixed seed (3, 8, 17, 40, 62, 71, 122, 151, 202, 203).
+
+- **Flash definition:** an emitter's pulses split at gaps > 50 ms.
+- **Interception rule:** ≥ 3 of the flash's pulses received within one dwell.
+- **Coverage:** every frequency is covered by 2–3 overlapping dwells, giving **50–200 ms of dwell per 2.15 s cycle** (median 100 ms).
+
+| Measure | Value |
+|---|---|
+| All flashes intercepted (10 random scenarios, pooled) | **11.5 %** (1,264 / 11,038); range 6.6–20.9 % per scenario |
+| Narrow flashes (< 50 ms) with ≥ 3 pulses, intercepted (11 scenarios) | **6.3 %**, consistent with the analytic (100 + 14) / 2150 ≈ 5.3 % to 7.6 % |
+| Narrow flashes (< 50 ms), ≥ 1-pulse rule | 8.1 % |
+| Narrow flashes that contain ≥ 3 pulses at all | only 19.6 %; the median narrow flash has 1 pulse |
+
+**Implication for metrics:** use *interceptable* flashes as the denominator (flashes with ≥ `n_min` pulses in truth), otherwise 1–2-pulse fragments dominate and deflate every policy's score.
+
 ## Design implications for PRIMES
 
 1. **The problem is flash interception.** The median emitter gives a ~14 ms flash every ~4 s. The open-loop sweep dwells 50–100 ms per band on a 2.15 s cycle. A scheduler that learns period and phase can place *short, well-timed* dwells and spend the time saved on search. That is the Predict layer's reason to exist.
