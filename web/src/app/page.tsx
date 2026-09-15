@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import LineChart from "@/components/LineChart";
 import SpectrumCanvas from "@/components/SpectrumCanvas";
 import { DecisionPanel, TrackTable } from "@/components/DecisionPanel";
+import HeadToHead from "@/components/HeadToHead";
 import {
   type Catalog, type RunPayload, createRun, getCatalog, num, pct, policyColor, policyLabel, POLICY_SLOT,
 } from "@/lib/api";
@@ -95,7 +96,7 @@ function Replay() {
     <>
       <h1>Mission replay</h1>
       <p className="sub">
-        Same emitters, same truth, two schedulers. Watch where each receiver looks and what it catches.
+        Two receivers face exactly the same radars. One scans the old way, one uses PRIMES. Watch which one catches more.
       </p>
 
       <div className="card controls">
@@ -108,11 +109,11 @@ function Replay() {
           </select>
         </div>
         <div className="field">
-          <label htmlFor="seed">Seed</label>
+          <label htmlFor="seed">Variant</label>
           <input id="seed" type="number" min={0} max={999} value={seed} disabled={scenario.startsWith("turing:")}
             onChange={(e) => setSeed(Math.max(0, Number(e.target.value)))} style={{ minWidth: 80, width: 80 }} />
         </div>
-        {[["Scheduler A", policyA, setPolicyA], ["Scheduler B", policyB, setPolicyB]].map(([label, value, set]) => (
+        {[["Receiver A", policyA, setPolicyA], ["Receiver B", policyB, setPolicyB]].map(([label, value, set]) => (
           <div className="field" key={label as string}>
             <label>{label as string}</label>
             <select value={value as string} onChange={(e) => (set as (v: string) => void)(e.target.value)}>
@@ -121,7 +122,7 @@ function Replay() {
           </div>
         ))}
         <div className="field">
-          <label htmlFor="pd">Detection probability</label>
+          <label htmlFor="pd">Detection reliability</label>
           <select id="pd" value={pD} onChange={(e) => setPD(Number(e.target.value))}>
             {[1, 0.9, 0.7].map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
@@ -141,12 +142,33 @@ function Replay() {
 
       {data && (
         <div className="stack">
+          <div className="explainer">
+            <div><strong>The radars</strong><span className="muted">Rotating radars only point at us for a brief &ldquo;flash&rdquo; every few seconds. Each flash is a chance to detect them.</span></div>
+            <div><strong>The receiver</strong><span className="muted">It can listen to only one small slice of the spectrum at a time, so it must choose where and when to listen.</span></div>
+            <div><strong>The score</strong><span className="muted">A flash counts only if the receiver was listening on the right frequency at that moment. More caught = better awareness.</span></div>
+          </div>
+
+          <HeadToHead data={data} a={policyA} b={policyB === policyA ? policyA : policyB} cursor={cursor} />
+
+          <div className="card playbar">
+            <button className="btn ghost" onClick={() => { if (cursor >= horizon) setCursor(0); setPlaying(!playing); }}>
+              {playing ? "Pause" : cursor >= horizon ? "Replay" : "Play"}
+            </button>
+            <input type="range" min={0} max={horizon} step={0.05} value={cursor} aria-label="Playback time"
+              onChange={(e) => { setPlaying(false); setCursor(Number(e.target.value)); }} />
+            <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 70 }}>{cursor.toFixed(1)} / {horizon} s</span>
+            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Playback speed">
+              {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
+            </select>
+          </div>
+
+          <h2 style={{ marginTop: 8 }}>Final results for the whole run</h2>
           <div className="tiles">
             {[
-              { label: "Flashes intercepted", fmt: (p: string) => pct(data.runs[p].metrics.interception_ratio) },
-              { label: "Emitters discovered", fmt: (p: string) => `${data.runs[p].metrics.emitters_discovered} / ${data.runs[p].metrics.emitters}` },
-              { label: "Mean time to first intercept", fmt: (p: string) => num(data.runs[p].metrics.ttfi_mean_s, 1, " s") },
-              { label: "Next-flash predictions correct", fmt: (p: string) => num(data.runs[p].metrics.prediction_correct_pct, 0, "%") },
+              { label: "Radar flashes caught", fmt: (p: string) => pct(data.runs[p].metrics.interception_ratio) },
+              { label: "Radars found", fmt: (p: string) => `${data.runs[p].metrics.emitters_discovered} of ${data.runs[p].metrics.emitters}` },
+              { label: "Average time to first catch", fmt: (p: string) => num(data.runs[p].metrics.ttfi_mean_s, 1, " s") },
+              { label: "Next flash predicted correctly", fmt: (p: string) => num(data.runs[p].metrics.prediction_correct_pct, 0, "%") },
             ].map((tile) => (
               <div className="tile" key={tile.label}>
                 <div className="label">{tile.label}</div>
@@ -162,35 +184,30 @@ function Replay() {
             ))}
           </div>
 
-          <div className="card playbar">
-            <button className="btn ghost" onClick={() => { if (cursor >= horizon) setCursor(0); setPlaying(!playing); }}>
-              {playing ? "Pause" : cursor >= horizon ? "Replay" : "Play"}
-            </button>
-            <input type="range" min={0} max={horizon} step={0.05} value={cursor} aria-label="Playback time"
-              onChange={(e) => { setPlaying(false); setCursor(Number(e.target.value)); }} />
-            <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 70 }}>{cursor.toFixed(1)} / {horizon} s</span>
-            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Playback speed">
-              {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
-            </select>
-          </div>
-
-          {shown.map((p) => (
+          {shown.map((p) => {
+            const tl = data.runs[p].timeline;
+            const i = Math.max(0, Math.min(tl.t.length - 1, Math.floor(cursor / (tl.t[1] - tl.t[0] || 0.25))));
+            return (
             <div className="card" key={p}>
-              <h2><span className="swatch" style={{ background: policyColor(p), marginRight: 8 }} />{policyLabel(p)}</h2>
+              <h2>
+                <span className="swatch" style={{ background: policyColor(p), marginRight: 8 }} />{policyLabel(p)}
+                <span className="live-count">caught {tl.intercepted[i]} flashes · found {tl.discovered[i]} radars</span>
+              </h2>
               <p className="sub" style={{ marginBottom: 8 }}>
-                Shaded bands: receiver dwells · dots: flashes intercepted · grey ticks: flashes that occurred (truth)
+                Coloured bands = where this receiver listened · grey ticks = radar flashes that happened · dots = flashes it caught
               </p>
               <SpectrumCanvas scenario={data.scenario} run={data.runs[p]} cursor={cursor} colorVar={`--series-${POLICY_SLOT[p] ?? 7}`} />
             </div>
-          ))}
+            );
+          })}
 
           <div className="grid-2">
             <div className="card">
-              <h2>Flashes intercepted over time</h2>
+              <h2>Radar flashes caught over time</h2>
               <LineChart series={series("intercepted")} horizon={horizon} cursor={cursor} format={(v) => v.toFixed(0)} />
             </div>
             <div className="card">
-              <h2>Emitters discovered over time</h2>
+              <h2>Radars found over time</h2>
               <LineChart series={series("discovered")} horizon={horizon} cursor={cursor} format={(v) => v.toFixed(0)} />
             </div>
           </div>
@@ -199,12 +216,12 @@ function Replay() {
             <div className="grid-2">
               <div className="card">
                 <h2>Why PRIMES looked there</h2>
-                <p className="sub" style={{ marginBottom: 10 }}>The decision at the playback cursor, with its scoring terms.</p>
+                <p className="sub" style={{ marginBottom: 10 }}>PRIMES explains every choice: what it expected to catch there, and why it beat the alternatives.</p>
                 <DecisionPanel run={primesRun} cursor={cursor} />
               </div>
               <div className="card">
                 <h2>What PRIMES has learned</h2>
-                <p className="sub" style={{ marginBottom: 10 }}>Most recently updated emitter tracks, estimated from hits and misses only.</p>
+                <p className="sub" style={{ marginBottom: 10 }}>Radars PRIMES has worked out on its own, from what it caught and missed. No prior intelligence.</p>
                 <TrackTable run={primesRun} emitters={data.scenario.emitters} cursor={cursor} />
               </div>
             </div>

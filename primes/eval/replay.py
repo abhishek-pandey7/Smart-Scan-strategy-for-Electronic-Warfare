@@ -48,7 +48,8 @@ def replay(policy: Policy, truth: Truth, priors: Priors, seed: int = 0, p_d: flo
             ex = policy.explain()
             if ex:
                 explanations.append((t, ex))
-        t += a.dwell_s + (retune_s if prev is not None and prev != a.centre else 0.0)
+        retune = max(retune_s, getattr(policy, "retune_s", 0.0))
+        t += a.dwell_s + (retune if prev is not None and prev != a.centre else 0.0)
         prev = a.centre
     return Trace(policy=policy.name, scenario=truth.name, seed=seed, looks=looks,
                  explanations=explanations, logs=policy.logs)

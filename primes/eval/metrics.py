@@ -36,6 +36,7 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
     appear = {e.id: e.appear_s for e in truth.emitters}
 
     n_able = n_hit = 0
+    n_pre = n_post = n_post_hit = 0          # acquisition vs track maintenance split
     per_emitter_ratio, ttfi, popup_latency = [], [], []
     for e, fl in truth.flashes.items():
         if e < 0:
@@ -50,6 +51,13 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         per_emitter_ratio.append(got / len(able))
         t0 = appear.get(e, 0.0)
         first = min(hits.values()) if hits else H
+        if hits:
+            post = able[fl[able, 0] >= first]
+            n_post += len(post)
+            n_post_hit += sum(1 for k in post if k in hits)
+            n_pre += len(able) - len(post)
+        else:
+            n_pre += len(able)
         ttfi.append(first - t0)
         if t0 > 0:
             popup_latency.append(first - t0)
@@ -82,6 +90,8 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         "interceptable_flashes": n_able,
         "intercepted_flashes": n_hit,
         "interception_ratio": n_hit / n_able if n_able else 0.0,
+        "tracked_ratio": n_post_hit / n_post if n_post else None,
+        "pre_discovery_loss": n_pre / n_able if n_able else 0.0,
         "interception_ratio_per_emitter": float(np.mean(per_emitter_ratio)) if per_emitter_ratio else 0.0,
         "emitters_discovered": int(len(discovered)),
         "discovery_fraction": len(discovered) / n_emitters if n_emitters else 0.0,
