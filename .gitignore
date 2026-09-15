@@ -1,5 +1,5 @@
 # Dataset (gated, ~70 GB) — never commit
-data/
+/data/
 *.h5
 
 # Python
