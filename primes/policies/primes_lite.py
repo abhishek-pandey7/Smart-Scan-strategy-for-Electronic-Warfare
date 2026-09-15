@@ -51,12 +51,16 @@ class PrimesLite(Policy):
         info = np.zeros((N_CENTRES, n_d))
         best_track, best_p = None, 0.0
         horizon = float(self.dwells[-1])
+        next_appt, appt_cover = np.inf, None
         for tr in self.tracks.values():
+            appt = tr.appointment(t)
+            if appt is not None and appt < next_appt:
+                next_appt, appt_cover = appt, tr.cover
             if not tr.relevant(t, horizon):
                 continue
-            p, ig = tr.action_terms(t, self.dwells)
+            p, v, ig = tr.action_terms(t, self.dwells, self.ctx.horizon_s)
             g = min(1.0, (t - tr.last_hit) / self.stale_s)
-            exploit += np.outer(tr.cover, g * p)
+            exploit += np.outer(tr.cover, g * v)
             info += np.outer(tr.cover, ig)
             if p.max() * g > best_p:
                 best_track, best_p = tr, float(p.max() * g)
@@ -65,6 +69,11 @@ class PrimesLite(Policy):
         value = exploit + discovery + (self.lam * info if self.use_info_gain else 0.0)
         cost = self.dwells[None, :] + self.retune_s * (np.arange(N_CENTRES) != self.prev_centre)[:, None]
         index = value / cost
+        if appt_cover is not None and next_appt > t:
+            # never be busy elsewhere when a confident track's flash is due: a dwell may not run past
+            # the appointment unless it covers that emitter
+            blocked = (t + self.dwells[None, :] + self.retune_s > next_appt) & (appt_cover[:, None] <= 0)
+            index = np.where(blocked, -np.inf, index)
 
         search_mode = best_p < self.search_threshold
         if search_mode and self.use_dither:
