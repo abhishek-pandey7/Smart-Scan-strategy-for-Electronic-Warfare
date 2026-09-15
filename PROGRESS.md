@@ -1,6 +1,6 @@
 # PRIMES — Progress
 
-_Last updated: 2026-09-15 (evening)_
+_Last updated: 2026-09-16_
 
 ## Status at a glance
 
@@ -39,6 +39,7 @@ main
          └─ feature/dqn               Gym environment, Double-DQN comparator
              └─ feature/api           FastAPI backend, benchmark script
                  └─ feature/web       Next.js frontend, docs, benchmark results, README, this file
+                     └─ feature/tracking-fix   value-of-resolving + appointment blocking, tuning sweep, re-run benchmark
 ```
 
 ## What's been built
@@ -90,12 +91,12 @@ Flash interception ratio, mean (higher is better). Full table with CIs: web benc
 
 | Scenario | Raster (open-loop) | Greedy bandit | Double-DQN | **PRIMES** | Oracle (upper bound) |
 |---|---|---|---|---|---|
-| easy | 5.6 % | 14.4 % | 4.4 % | **62.5 %** | 96.1 % |
-| lock-out | 1.0 % | 7.6 % | 5.8 % | **48.2 %** | 98.3 % |
+| easy | 5.6 % | 14.4 % | 4.4 % | **65.5 %** | 96.1 % |
+| lock-out | 1.0 % | 7.6 % | 5.8 % | **60.2 %** | 98.3 % |
 | pop-up | 5.8 % | 10.8 % | 5.3 % | **57.9 %** | 97.6 % |
-| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **63.0 %** | 89.9 % |
-| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **80.7 %** | 94.3 % |
-| **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **63.0 %** | 84.8 % |
+| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **65.2 %** | 89.9 % |
+| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **79.1 %** | 94.3 % |
+| **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **64.5 %** | 84.8 % |
 
 PRIMES' 95 % intervals do not overlap any non-oracle rival's on any scenario family.
 
@@ -103,23 +104,27 @@ Other metrics:
 
 | Scenario | Emitters discovered: raster → PRIMES | Mean time to first intercept: raster → PRIMES | PRIMES next-flash predictions correct |
 |---|---|---|---|
-| easy | 68 % → 84 % | 36.9 s → 23.7 s | 82 % |
-| lock-out | 15 % → 92 % | 55.7 s → 24.2 s | 97 % |
-| pop-up | 57 % → 72 % (pop-up latency 25.0 s → 22.7 s) | 32.0 s → 24.5 s | 95 % |
-| dense | 76 % → 69 % | 27.6 s → 26.8 s | 96 % |
-| mixed | 87 % → 90 % | 18.9 s → 16.0 s | 92 % |
-| Turing (real) | 93 % → 87 % | 9.7 s → 10.3 s | 18 % (few flash-like emitters; see caveats) |
+| easy | 68 % → 81 % | 36.9 s → 25.3 s | 89 % |
+| lock-out | 15 % → 92 % | 55.7 s → 24.2 s | 100 % |
+| pop-up | 57 % → 72 % | 32.0 s → 26.1 s | 96 % |
+| dense | 76 % → 69 % | 27.6 s → 25.6 s | 98 % |
+| mixed | 87 % → 87 % | 18.9 s → 17.7 s | 94 % |
+| Turing (real) | 93 % → 91 % | 9.7 s → 9.7 s | 14 % (few flash-like emitters; see caveats) |
+
+**Where the remaining losses are** (measured split, PRIMES): on `easy` 36 % of flashes occur *before* a blind search first finds their emitter, but once tracked PRIMES catches **99.5 %**, better than the oracle's own tracking rate; on lock-out tracked-flash capture is 95 %; on real Turing data ~5 % is lost to search and tracked capture is ~70 % vs the oracle's ~82 %, a gap that is receiver contention (dozens of emitters on at once) plus the oracle's foresight, since the on/off model is well calibrated (predicted 0.39 vs observed 0.37, bin by bin).
 
 **Ablations (what produces the gain):**
-- **Learned prior vs flat prior:** large effect on sparse periodic scenarios (`easy` 62.5 % vs 38.2 %, `pop-up` 57.9 % vs 45.8 %), neutral on dense / mixed / Turing where the on/off model and κ dominate.
+- **Learned prior vs flat prior:** large effect on sparse periodic scenarios (`easy` 65.5 % vs 44.9 %, `pop-up` 57.9 % vs 49.8 %), neutral on dense / mixed / Turing where the on/off model and κ dominate.
+- **Value of resolving + appointment blocking (this session's fix):** lock-out 48.2 % → 60.2 %, easy 62.5 % → 65.5 %, dense 63.0 % → 65.2 %, Turing 63.0 % → 64.5 % with discovery 87 % → 91 %.
+- **Parameter sweep** (`experiments/tune_wnew.py`, on training seeds and three Turing files outside the benchmark): the defaults `w_new = 2`, `stale = 2 s` are at the optimum of the cross-family mean; a higher discovery weight helps Turing slightly but costs lock-out, so defaults were kept.
 - **Information-gain term:** no measurable effect at this scale (all differences inside the CIs). Honest finding: the exploit + discovery terms already place looks well; IG is a candidate for removal or re-tuning.
 
-**Where PRIMES does not win:** on real Turing data and on `dense`, raster discovers slightly *more* emitters (93 % vs 87 %; 76 % vs 69 %) and reaches its first intercept about as fast. PRIMES trades a little breadth of search for 3.75× the flashes intercepted. Tuning `w_new` (the discovery weight) would move along this trade-off.
+**Where PRIMES does not win:** on `dense` (and marginally on real data) raster discovers slightly *more* emitters (76 % vs 69 %; 93 % vs 91 %) at the same time-to-first-intercept. PRIMES trades a little breadth of search for 3.8× the flashes intercepted. `w_new` moves along this trade-off.
 
 ## Known issues and caveats
 
 1. **DQN is a modest rival.** It matches the greedy bandit but not more; a stronger model-free baseline (longer training, recurrent policy) would make the comparison harder to dismiss. What exists is fair: same reward, same environment, best-on-validation checkpoint, held-out seeds.
-2. **Discovery breadth on real data** is slightly below raster (see results). Tunable via `w_new`.
+2. **Discovery breadth on `dense`** is below raster (69 % vs 76 %); on real data it is now within 2 points. Tunable via `w_new`.
 3. **Information gain adds nothing measurable** in the current setup; keep it in the architecture story as an ablated component, not as a claimed source of gain.
 4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Real deinterleaving is roadmap.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
@@ -128,7 +133,7 @@ Other metrics:
 
 ## Next steps
 
-1. Open one PR from `feature/web` into `main` (it contains every branch) and merge.
+1. Open one PR from `feature/tracking-fix` into `main` (it contains every branch) and merge.
 2. Put the benchmark numbers and the ablation findings on the slides; the benchmark page screenshots well.
 3. Optional improvements: tune `w_new` / `λ` on training seeds (Optuna); vectorise PRIMES across tracks for speed; stronger DQN; real deinterleaving instead of ideal association.
 
