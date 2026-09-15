@@ -18,6 +18,7 @@ from pathlib import Path
 import numpy as np
 
 OUT = Path(__file__).resolve().parents[1] / "artifacts" / "benchmark.json"
+BENCHMARK_TURING = [3, 8, 17, 40, 62, 71, 122, 151, 192, 202, 203]
 METRICS = ["interception_ratio", "interception_ratio_per_emitter", "discovery_fraction", "ttfi_mean_s",
            "ttfi_p95_s", "popup_latency_mean_s", "prediction_correct_pct", "intercept_time_error_ms",
            "intercept_time_error_median_ms", "intercept_rate_per_s", "mean_dwell_ms"]
@@ -63,7 +64,6 @@ def summarise(rows: list[dict]) -> list[dict]:
 
 
 def main() -> None:
-    from primes.data.turing import available_configs
     from primes.env.scenarios import SIM_FAMILIES
     from primes.eval.runner import available_policies
 
@@ -71,12 +71,13 @@ def main() -> None:
     ap.add_argument("--seeds", type=int, default=10)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--families", nargs="*", default=list(SIM_FAMILIES))
-    ap.add_argument("--turing", nargs="*", type=int, default=None, help="config ids (default: all local)")
+    ap.add_argument("--turing", nargs="*", type=int, default=BENCHMARK_TURING,
+                    help="val_stare config ids (default: the fixed benchmark set; tuning uses 5, 50, 100)")
     ap.add_argument("--policies", nargs="*", default=None)
     args = ap.parse_args()
 
     policies = args.policies or available_policies()
-    turing = available_configs() if args.turing is None else args.turing
+    turing = args.turing
     tasks = [(f, s, p) for f in args.families for s in range(args.seeds) for p in policies]
     tasks += [(f"turing:{c}", 0, p) for c in turing for p in policies]
     print(f"{len(tasks)} runs: {len(args.families)} families x {args.seeds} seeds + {len(turing)} Turing scenarios, "

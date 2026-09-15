@@ -45,7 +45,7 @@ stare/{train_stare,val_stare,test_stare}/config_N.h5  49.2 / 4.9 / 5.7 GB
 - **Scan type:** Circular 96 %, Omni 4 %.
 - **Frequency:** FixedSingle 52 %, FixedMultiSimultaneous 12 %, HoppingSawtooth 11 %, RandomRange 11 %, HoppingLinear 10 %, RandomFixed 5 %.
 - **PRI:** Fixed 39 %, Staggered 27 %, SwitchDwell 19 %, Jittered 13 %, Sliding 2 %.
-- **Detection:** only pulses from the main beam reach the receiver (sidelobes are not modelled or fall below sensitivity). An emitter is therefore visible only as a short **flash** once per scan period.
+- **Detection (metadata view):** beamwidth × period gives a main-beam illumination of ~14 ms every ~4 s for the median emitter. **The observed pulses tell a different story** — see "Measured visibility" below.
 - **Open-loop scan coverage:** in the median scenario, 74 % of listed emitters produce at least one scan-mode pulse (p10 67 %, min 47 %). *Caveat:* the denominator includes emitters invisible even to the stare receiver. The true open-loop miss rate needs the paired stare files.
 
 ## Open-loop raster performance on stare truth (measured)
@@ -65,10 +65,30 @@ The exact Turing raster schedule was replayed against stare-mode truth for 11 `v
 
 **Implication for metrics:** use *interceptable* flashes as the denominator (flashes with ≥ `n_min` pulses in truth), otherwise 1–2-pulse fragments dominate and deflate every policy's score.
 
+## Measured visibility in stare-mode truth (11 scenarios, 431 emitters)
+
+Splitting each emitter's stare-mode pulses into illuminations (gaps > 50 ms, ≥ 3 pulses) and summing their durations over the 30 s window:
+
+| Visibility duty cycle | min | p10 | p25 | median | p75 | p90 | max |
+|---|---|---|---|---|---|---|---|
+| fraction of the window an emitter is receivable | 0.00 | 0.03 | 0.12 | **0.32** | 0.63 | 0.83 | 0.99 |
+
+- Only **12 %** of emitters are *flash-like* (visible < 5 % of the time). The rest are visible for long, irregular stretches (sidelobes, moving platforms, wide beams, multi-second illuminations).
+- Among flash-like emitters, illumination gaps are almost never clean multiples of the metadata scan period (1 of 53). Real visibility is **intermittent, not cleanly periodic**.
+- Consequence: a purely periodic-flash predictor is the wrong single model for this data. PRIMES therefore runs a **periodic model and a Gilbert–Elliott on/off model per emitter** and lets hits and misses decide between them, and it **learns online how visible undiscovered emitters are** (the κ factor) instead of trusting the metadata-derived flash prior.
+
+## Learned priors (`train_scan`, 2,500 scenarios, 128,252 emitters)
+
+Fitted by streaming per-transmitter metadata over the HF API (`primes/data/fit_priors.py`, ~10 min, no download):
+
+- **96.2 % of circular scan periods fall on 22 discrete values.** Top: 2 s (12.3 %), 10 s (10.7 %), 1 s (10.7 %), 4 s (10.6 %), 5 s (7.7 %), 2.5 s (6.1 %), 6 s (4.6 %), 3 s (4.5 %).
+- Within the 0.5–30 s range that matters for a 30–60 s engagement, 19 discrete periods carry 96.3 % of the mass. After a **single** catch, PRIMES therefore only has to test ~19 candidate return times, and one more hit or a few misses usually settle it.
+- Omni fraction 3.6 %; frequency-mode and PRI distributions match the validation split above.
+
 ## Design implications for PRIMES
 
-1. **The problem is flash interception.** The median emitter gives a ~14 ms flash every ~4 s. The open-loop sweep dwells 50–100 ms per band on a 2.15 s cycle. A scheduler that learns period and phase can place *short, well-timed* dwells and spend the time saved on search. That is the Predict layer's reason to exist.
-2. **Learning must succeed from 2–3 flashes.** A 30 s window with a median 4 s period gives about 7 flashes per emitter, and the first few must be enough. That favours a Bayesian periodic-hypothesis predictor over model-free DRL, which is sample-hungry.
+1. **Two visibility regimes.** Flash-like emitters (12 %) reward learning period and phase and placing *short, well-timed* dwells. The majority are intermittently visible for seconds at a time; for those the question is "is it on right now?", answered by an on/off Markov belief that decays between looks.
+2. **Learning must succeed from 2–3 observations.** With ~19 discrete period candidates from the learned prior and interval-censored misses, a periodic emitter is usually pinned down by its second or third catch. That favours an explicit Bayesian predictor over model-free DRL, which is sample-hungry.
 3. **Long-period tail.** Periods of 15–600 s flash at most twice in the window, so period learning is impossible there. The hypothesis bank must fall back to a search prior, and metrics must be stratified by period relative to the window.
 4. **Correlated arms.** Overlapping dwells share coverage, so selection should maximise marginal coverage gain (a submodular problem), not use independent restless-bandit arms.
 5. **Time resolution.** Flashes can be as short as 0.33 ms (p10 1.25 ms). Replay therefore runs at pulse level, and the learning tensor uses ≤ 1 ms slots.
@@ -79,7 +99,7 @@ The exact Turing raster schedule was replayed against stare-mode truth for 11 `v
 | Split | Size | Purpose | Status |
 |---|---|---|---|
 | `val_scan` | 0.48 GB | receiver model, population stats | downloaded |
-| `val_stare` | 4.9 GB | ground truth for development evaluation | pending |
-| `train_scan` | 4.9 GB | emitter-parameter priors for the simulator (metadata only) | pending |
+| `val_stare` | 4.9 GB | ground truth for development evaluation | 11 files fetched on demand |
+| `train_scan` | 4.9 GB | emitter-parameter priors | streamed via HF API, nothing stored |
 | `test_scan` + `test_stare` | 6.3 GB | held-out final results | pending |
 | `train_stare` | 49 GB | not needed; we train on the simulator | skip |

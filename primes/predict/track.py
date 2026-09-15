@@ -25,6 +25,9 @@ MISS_FLOOR = 0.05           # a single miss never fully vetoes a hypothesis (P_d
 HIT_FLOOR = 0.02
 SAME_FLASH_S = 0.05
 MAX_HYPOTHESES = 64
+RESOLVE_FRACTION = 0.8      # share of an emitter's future flashes we expect to catch once its period is pinned down
+MAX_FUTURE_FLASHES = 30.0
+CONFIDENT = 0.6             # posterior weight above which a track's next flash is treated as an appointment
 MIN_UNCERTAINTY_S = 0.0005
 PRE_DETECTION_S = 10.0       # misses this long before a first detection still count as evidence
 REL_BIN = (PERIOD_RANGE_S[1] / PERIOD_RANGE_S[0]) ** (1 / N_GRID) - 1
@@ -329,14 +332,41 @@ class Track:
             self.log_odds_markov += np.log(max(p_markov_miss, MISS_FLOOR)) - np.log(max(1.0 - p_mix, MISS_FLOOR))
 
     # ------------------------------------------------------------------ prediction
-    def action_terms(self, t: float, dwells: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
-        """Per dwell option, assuming full coverage: expected detection probability and information gain."""
+    def action_terms(self, t: float, dwells: np.ndarray, horizon: float | None = None
+                     ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Per dwell option, assuming full coverage: (detection probability, value, information gain).
+
+        Value counts a detection as 1 flash plus the future flashes that *resolving* the track would
+        unlock: an unconfirmed periodic emitter caught now yields ~RESOLVE_FRACTION of its remaining
+        flashes, scaled by how unresolved the track still is (1 - max posterior weight).
+        """
         pm = self.p_markov
         rows, wts = [self._flash_prob(t, dwells) * P_D_MODEL], [_softmax(self.logw) * (1 - pm)]
+        n_per = len(self.T)
         if self.markov is not None:
             rows.append(P_D_MODEL * self.markov.belief_matrix(t + dwells / 2))
             wts.append(self.markov.weights * pm)
         P, w = np.vstack(rows), np.concatenate(wts)
         mean = w @ P
         ig = binary_entropy(mean) - w @ binary_entropy(P)
-        return mean, np.maximum(ig, 0.0)
+        value = mean
+        if horizon is not None and n_per:
+            unresolved = 1.0 - float(w.max()) if len(w) else 0.0
+            future = np.zeros(len(w))
+            future[:n_per] = np.minimum((horizon - t) / self.T, MAX_FUTURE_FLASHES)
+            value = w @ (P * (1.0 + RESOLVE_FRACTION * unresolved * future)[:, None])
+        return mean, value, np.maximum(ig, 0.0)
+
+    def appointment(self, t: float) -> float | None:
+        """Start time of the next flash if the periodic model is confident, else None."""
+        if self.p_markov > 0.5 or len(self.T) == 0:
+            return None
+        w = _softmax(self.logw)
+        i = int(np.argmax(w))
+        if w[i] < CONFIDENT:
+            return None
+        k = np.ceil((t - self.phi[i]) / self.T[i])
+        start = self.phi[i] + k * self.T[i]
+        if start <= self.last_hit + max(self.width, SAME_FLASH_S):
+            start += self.T[i]
+        return float(start - self._uncertainty(np.array([k]))[0])
