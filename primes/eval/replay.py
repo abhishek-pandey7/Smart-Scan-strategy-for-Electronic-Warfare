@@ -35,13 +35,17 @@ def replay(policy: Policy, truth: Truth, priors: Priors, seed: int = 0, p_d: flo
     rx = Receiver(truth, rx_rng, p_d=p_d, p_fa=p_fa)
 
     looks, explanations = [], []
-    t, prev = 0.0, None
+    t, prev, window_start = 0.0, None, 0.0
     while t < truth.horizon_s:
         a = policy.act(t)
         if not (0 <= a.centre < N_CENTRES) or a.dwell_s <= 0:
             raise ValueError(f"{policy.name}: invalid action {a}")
-        a = Action(a.centre, min(a.dwell_s, truth.horizon_s - t))
-        look = rx.observe(t, a)
+        a = Action(a.centre, min(a.dwell_s, truth.horizon_s - t), a.extend, a.stop_on_detect)
+        contiguous = a.extend and prev == a.centre
+        if not contiguous:
+            window_start = t
+        look = rx.observe(t, a, window_start=window_start if contiguous else None)
+        spent = look.t + look.action.dwell_s - t          # actual time used this step (stop_on_detect may shorten it)
         policy.update(look)
         looks.append(look)
         if explain_every and len(looks) % explain_every == 0:
@@ -49,7 +53,7 @@ def replay(policy: Policy, truth: Truth, priors: Priors, seed: int = 0, p_d: flo
             if ex:
                 explanations.append((t, ex))
         retune = max(retune_s, getattr(policy, "retune_s", 0.0))
-        t += a.dwell_s + (retune if prev is not None and prev != a.centre else 0.0)
+        t += spent + (retune if prev is not None and prev != a.centre else 0.0)
         prev = a.centre
     return Trace(policy=policy.name, scenario=truth.name, seed=seed, looks=looks,
                  explanations=explanations, logs=policy.logs)

@@ -29,6 +29,8 @@ def covering_centres(freq_mhz: float) -> np.ndarray:
 class Action:
     centre: int
     dwell_s: float
+    extend: bool = False          # continue listening on the same centre: pulses count across both looks
+    stop_on_detect: bool = False  # end the dwell as soon as some emitter reaches N_MIN_PULSES
 
 
 @dataclass
@@ -37,6 +39,7 @@ class Look:
     action: Action
     detections: dict[int, np.ndarray]    # emitter id -> received pulse ToAs (s); id -1 is a false alarm
     freqs: dict[int, np.ndarray] = field(default_factory=dict)   # emitter id -> measured pulse frequencies (MHz)
+    partial: dict[int, float] = field(default_factory=dict)      # emitter id -> last pulse ToA, for 1..N_MIN-1 pulses seen
 
 
 @dataclass
