@@ -30,6 +30,15 @@ def intercepted_flashes(trace: Trace, truth: Truth) -> dict[int, dict[int, float
     return out
 
 
+def _threat_accuracy(trace: Trace, threat: dict[int, str]) -> float | None:
+    """Share of labelled tracks whose latest predicted threat level matches the truth."""
+    latest: dict[int, list[float]] = {}
+    for _, e, probs in trace.logs.threats:
+        latest[e] = probs
+    scored = [(("low", "medium", "high")[int(np.argmax(p))] == threat[e]) for e, p in latest.items() if threat.get(e)]
+    return float(np.mean(scored)) if scored else None
+
+
 def compute_metrics(trace: Trace, truth: Truth) -> dict:
     H = truth.horizon_s
     caught = intercepted_flashes(trace, truth)
@@ -37,6 +46,11 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
 
     n_able = n_hit = 0
     n_pre = n_post = n_post_hit = 0          # acquisition vs track maintenance split
+    from primes.threat.taxonomy import threat_weight
+    threat = {e.id: e.threat for e in truth.emitters}
+    w_able = w_hit = 0.0
+    high_able = high_hit = 0
+    high_ttfi: list[float] = []
     per_emitter_ratio, ttfi, popup_latency = [], [], []
     for e, fl in truth.flashes.items():
         if e < 0:
@@ -48,6 +62,12 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         hits = caught.get(e, {})
         got = sum(1 for k in able if k in hits)
         n_able += len(able); n_hit += got
+        lvl = threat.get(e, "")
+        if lvl:
+            w_able += threat_weight(lvl) * len(able)
+            w_hit += threat_weight(lvl) * got
+        if lvl == "high":
+            high_able += len(able); high_hit += got
         per_emitter_ratio.append(got / len(able))
         t0 = appear.get(e, 0.0)
         first = min(hits.values()) if hits else H
@@ -59,6 +79,8 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         else:
             n_pre += len(able)
         ttfi.append(first - t0)
+        if lvl == "high":
+            high_ttfi.append(first - t0)
         if t0 > 0:
             popup_latency.append(first - t0)
 
@@ -91,6 +113,10 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         "intercepted_flashes": n_hit,
         "interception_ratio": n_hit / n_able if n_able else 0.0,
         "tracked_ratio": n_post_hit / n_post if n_post else None,
+        "threat_weighted_interception": w_hit / w_able if w_able else None,
+        "high_threat_interception": high_hit / high_able if high_able else None,
+        "high_threat_ttfi_s": float(np.mean(high_ttfi)) if high_ttfi else None,
+        "threat_class_accuracy": _threat_accuracy(trace, threat),
         "pre_discovery_loss": n_pre / n_able if n_able else 0.0,
         "interception_ratio_per_emitter": float(np.mean(per_emitter_ratio)) if per_emitter_ratio else 0.0,
         "emitters_discovered": int(len(discovered)),

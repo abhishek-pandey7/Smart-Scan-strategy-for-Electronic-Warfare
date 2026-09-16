@@ -6,6 +6,8 @@ import LineChart from "@/components/LineChart";
 import SpectrumCanvas from "@/components/SpectrumCanvas";
 import { DecisionPanel, TrackTable } from "@/components/DecisionPanel";
 import HeadToHead from "@/components/HeadToHead";
+import ScenarioBrief from "@/components/ScenarioBrief";
+import { briefing } from "@/lib/scenarios";
 import {
   type Catalog, type RunPayload, createRun, getCatalog, num, pct, policyColor, policyLabel, POLICY_SLOT,
 } from "@/lib/api";
@@ -90,7 +92,6 @@ function Replay() {
     shown.map((p) => ({ key: p, label: policyLabel(p), color: policyColor(p), x: data!.runs[p].timeline.t, y: data!.runs[p].timeline[key] }));
 
   const policyOptions = catalog?.policies ?? [];
-  const scenarioInfo = catalog?.scenarios.find((s) => s.id === scenario)?.description;
 
   return (
     <>
@@ -104,7 +105,7 @@ function Replay() {
           <label htmlFor="scn">Scenario</label>
           <select id="scn" value={scenario} onChange={(e) => setScenario(e.target.value)}>
             {(catalog?.scenarios ?? [{ id: scenario, description: "" }]).map((s) => (
-              <option key={s.id} value={s.id}>{s.id}</option>
+              <option key={s.id} value={s.id}>{briefing(s.id).short}</option>
             ))}
           </select>
         </div>
@@ -130,8 +131,9 @@ function Replay() {
         <button className="btn" onClick={run} disabled={loading || !catalog}>
           {loading ? "Running replay…" : "Run replay"}
         </button>
-        {scenarioInfo && <span className="muted" style={{ flexBasis: "100%" }}>{scenarioInfo}</span>}
       </div>
+
+      <ScenarioBrief id={scenario} scenario={data && data.request.scenario === scenario ? data.scenario : undefined} />
 
       {error && <p className="error">{error}</p>}
       {loading && (

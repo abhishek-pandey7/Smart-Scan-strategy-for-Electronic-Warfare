@@ -33,6 +33,7 @@ class Priors:
     freq_mode: list[str]
     emitters_per_scenario: float
     omni_fraction: float
+    function: list[str] | None = None      # radar type per sample, when the priors file carries it
 
     # ------------------------------------------------------------------ construction
     @classmethod
@@ -47,6 +48,7 @@ class Priors:
             pri_s=np.array([x["pri_s"] for x in s]),
             freqs_mhz=[x["freqs_mhz"] for x in s],
             freq_mode=[x["freq_mode"] for x in s],
+            function=[x.get("function", "") for x in s] if any("function" in x for x in s) else None,
             emitters_per_scenario=float(np.mean(raw["emitters_per_scenario"])),
             omni_fraction=float(raw["omni_fraction"]),
         )
