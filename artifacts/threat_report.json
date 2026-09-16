@@ -1,0 +1,71 @@
+{
+ "features": [
+  "log_freq_ghz",
+  "log1p_freq_span_mhz",
+  "n_freqs",
+  "log_pri_us",
+  "pri_cv",
+  "n_pri_levels",
+  "log_pw_us",
+  "log_pw_max_us",
+  "n_pw_levels",
+  "log_duty",
+  "omni",
+  "log_period_s",
+  "log_flash_ms"
+ ],
+ "levels": [
+  "low",
+  "medium",
+  "high"
+ ],
+ "n_train": 384660,
+ "n_test": 12512,
+ "class_prior_train": [
+  0.1909,
+  0.4865,
+  0.3226
+ ],
+ "accuracy": 1.0,
+ "macro_f1": 1.0,
+ "per_class": {
+  "low": {
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1-score": 1.0
+  },
+  "medium": {
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1-score": 1.0
+  },
+  "high": {
+   "precision": 1.0,
+   "recall": 1.0,
+   "f1-score": 1.0
+  }
+ },
+ "confusion": [
+  [
+   2326,
+   0,
+   0
+  ],
+  [
+   0,
+   6074,
+   0
+  ],
+  [
+   0,
+   0,
+   4112
+  ]
+ ],
+ "mean_priority_weight_by_true_level": {
+  "low": 0.3,
+  "medium": 1.0,
+  "high": 3.0
+ },
+ "high_recall": 1.0
+}

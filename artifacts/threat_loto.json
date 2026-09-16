@@ -1,0 +1,15 @@
+{
+ "method": "leave-one-radar-type-out over 68 types, 150 emitters per type, one noisy observation each",
+ "accuracy": 0.63,
+ "chance": 0.485,
+ "per_class_recall": {
+  "low": 0.646,
+  "medium": 0.617,
+  "high": 0.642
+ },
+ "mean_assigned_weight_by_true_level": {
+  "low": 1.04,
+  "medium": 1.54,
+  "high": 2.26
+ }
+}
