@@ -1,6 +1,6 @@
 # PRIMES — Progress
 
-_Last updated: 2026-09-16 (benchmark re-verified, 549 runs)_
+_Last updated: 2026-09-16 (micro dwell controller default; 610-run benchmark)_
 
 ## Status at a glance
 
@@ -9,12 +9,13 @@ _Last updated: 2026-09-16 (benchmark re-verified, 549 runs)_
 | Research, design, dataset analysis | ✅ done |
 | Learned emitter priors from Turing data | ✅ done |
 | Simulator, receiver model, baselines, replay, metrics | ✅ done, tested |
-| PRIMES-lite scheduler (the ML core) | ✅ working, tested; beats baselines in smoke tests |
+| PRIMES-lite scheduler (the ML core) | ✅ working, tested; beats every rival on every scenario family with non-overlapping CIs |
 | Double-DQN comparator | ✅ trained and evaluated on held-out seeds (fair rival, on par with the greedy bandit) |
 | FastAPI backend | ✅ working |
 | Next.js frontend (replay + benchmark pages) | ✅ working, both pages verified |
-| Multi-seed benchmark with confidence intervals | ✅ done: 488 runs, `artifacts/benchmark.json` |
-| Docs corrections from new findings | ✅ done |
+| Multi-seed benchmark with confidence intervals | ✅ done: 610 runs incl. ablations, `artifacts/benchmark.json` |
+| Solution document (ideation, technical approach, feasibility, impact, references) | ✅ `docs/PRIMES_FULL_ARCHITECTURE.md` |
+| Frontend head-to-head banner (live "N× more" factor) | ✅ done |
 
 ## Where things are
 
@@ -40,6 +41,8 @@ main
              └─ feature/api           FastAPI backend, benchmark script
                  └─ feature/web       Next.js frontend, docs, benchmark results, README, this file
                      └─ feature/tracking-fix   value-of-resolving + appointment blocking, tuning sweep, re-run benchmark
+                         └─ feature/search-prior   frequency-prior ablation, resumable benchmark
+                             └─ feature/accuracy   micro dwell controller, head-to-head UI, solution document, 610-run benchmark
 ```
 
 ## What's been built
@@ -66,7 +69,8 @@ main
 - **Periodic track model per emitter:** candidates from the learned discrete prior after one hit; weighted least-squares refit from hit differences after two. Misses eliminate phase intervals (interval-censored evidence).
 - **Gilbert–Elliott on/off model** per emitter, competing with the periodic model through Bayes factors. This handles the real data's intermittent visibility.
 - **Undiscovered-emitter belief** per 250 MHz cell, with a pop-up hazard and an **online-learned visibility factor κ**. It adapts when real emitters are far more visible than the metadata prior suggests.
-- **Rate index:** value per unit receiver time = (exploit + discovery + λ·information gain) / dwell. It chooses the dwell centre and dwell length (10–100 ms), uses golden-ratio dither in search mode, and logs an explanation for every decision.
+- **Rate index:** value per unit receiver time = (exploit + discovery + λ·information gain) / dwell. It chooses the dwell centre and dwell length (5–100 ms), uses golden-ratio dither in search mode, and logs an explanation for every decision.
+- **Micro dwell controller (default):** 5 ms search looks; a look that heard 1–2 pulses near its end is extended on the same frequency; search looks stop once 3 pulses confirm an emitter; a look only counts as evidence if it comfortably holds that emitter's pulses.
 - **20 unit tests pass:** period recovery, sub-harmonic elimination, Markov learning, lock-out breaking, beating raster.
 
 ### 4. Double-DQN comparator (`primes/rl/`)
@@ -85,39 +89,41 @@ main
   - shareable auto-run links
 - **Web, benchmark page:** interval plots with 95 % confidence intervals, plus a table.
 
-## Benchmark results (10 seeds × 5 simulated families + 11 real Turing scenarios, 95 % bootstrap CIs)
+## Benchmark results (610 runs: 10 seeds × 5 simulated families + 11 real Turing scenarios, 95 % bootstrap CIs)
 
 Flash interception ratio, mean (higher is better). Full table with CIs: web benchmark page or `artifacts/benchmark.json`.
 
 | Scenario | Raster (open-loop) | Greedy bandit | Double-DQN | **PRIMES** | Oracle (upper bound) |
 |---|---|---|---|---|---|
-| easy | 5.6 % | 14.4 % | 4.4 % | **65.5 %** | 96.1 % |
-| lock-out | 1.0 % | 7.6 % | 5.8 % | **60.2 %** | 98.3 % |
-| pop-up | 5.8 % | 10.8 % | 5.3 % | **57.9 %** | 97.6 % |
-| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **65.2 %** | 89.9 % |
-| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **79.1 %** | 94.3 % |
-| **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **64.5 %** | 84.8 % |
+| easy | 5.6 % | 14.4 % | 4.4 % | **72.3 %** | 96.1 % |
+| lock-out | 1.0 % | 7.6 % | 5.8 % | **69.1 %** | 98.3 % |
+| pop-up | 5.8 % | 10.8 % | 5.3 % | **61.6 %** | 97.6 % |
+| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **65.9 %** | 89.9 % |
+| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **78.8 %** | 94.3 % |
+| **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **69.8 %** | 84.8 % |
 
-PRIMES' 95 % intervals do not overlap any non-oracle rival's on any scenario family.
+PRIMES' 95 % intervals do not overlap any non-oracle rival's on any scenario family. On real data PRIMES catches **4.2×** the flashes of the open-loop sweep and reaches **82 %** of what a clairvoyant scheduler achieves.
 
 Other metrics:
 
-| Scenario | Emitters discovered: raster → PRIMES | Mean time to first intercept: raster → PRIMES | PRIMES next-flash predictions correct |
-|---|---|---|---|
-| easy | 68 % → 81 % | 36.9 s → 25.3 s | 89 % |
-| lock-out | 15 % → 92 % | 55.7 s → 24.2 s | 100 % |
-| pop-up | 57 % → 72 % | 32.0 s → 26.1 s | 96 % |
-| dense | 76 % → 69 % | 27.6 s → 25.6 s | 98 % |
-| mixed | 87 % → 87 % | 18.9 s → 17.7 s | 94 % |
-| Turing (real) | 93 % → 91 % | 9.7 s → 9.7 s | 14 % (few flash-like emitters; see caveats) |
+| Scenario | Emitters discovered: raster → PRIMES | Mean time to first intercept: raster → PRIMES | Flashes caught once tracked (PRIMES) | Next-flash predictions correct |
+|---|---|---|---|---|
+| easy | 68 % → 93 % | 36.9 s → 16.6 s | 94.7 % | 91 % |
+| lock-out | 15 % → 95 % | 55.7 s → 17.2 s | 91.0 % | 98 % |
+| pop-up | 57 % → 78 % | 32.0 s → 20.5 s | 96.3 % | 94 % |
+| dense | 76 % → 70 % | 27.6 s → 25.4 s | 84.6 % | 96 % |
+| mixed | 87 % → 86 % | 18.9 s → 17.7 s | 88.5 % | 92 % |
+| Turing (real) | 93 % → 93 % | 9.7 s → 9.3 s | 73.6 % | 6 % (few flash-like emitters; see caveats) |
 
-**Where the remaining losses are** (measured split, PRIMES): on `easy` 36 % of flashes occur *before* a blind search first finds their emitter, but once tracked PRIMES catches **99.5 %**, better than the oracle's own tracking rate; on lock-out tracked-flash capture is 95 %; on real Turing data ~5 % is lost to search and tracked capture is ~70 % vs the oracle's ~82 %, a gap that is receiver contention (dozens of emitters on at once) plus the oracle's foresight, since the on/off model is well calibrated (predicted 0.39 vs observed 0.37, bin by bin).
+**Where the remaining losses are:** on simulated scenarios most of the gap to the oracle is flashes that occur *before* a blind search first finds their emitter; once tracked, PRIMES catches 85–96 % of an emitter's flashes. On real data only ~5 % is lost to search; tracked capture is ~74 % vs the oracle's ~85 %, which is receiver contention (dozens of emitters visible at once) plus the oracle's foresight. The on/off model itself is well calibrated (predicted 0.39 vs observed 0.37, bin by bin).
 
-**Ablations (what produces the gain):**
-- **Learned prior vs flat prior:** large effect on sparse periodic scenarios (`easy` 65.5 % vs 44.9 %, `pop-up` 57.9 % vs 49.8 %), neutral on dense / mixed / Turing where the on/off model and κ dominate.
-- **Value of resolving + appointment blocking (this session's fix):** lock-out 48.2 % → 60.2 %, easy 62.5 % → 65.5 %, dense 63.0 % → 65.2 %, Turing 63.0 % → 64.5 % with discovery 87 % → 91 %.
-- **Parameter sweep** (`experiments/tune_wnew.py`, on training seeds and three Turing files outside the benchmark): the defaults `w_new = 2`, `stale = 2 s` are at the optimum of the cross-family mean; a higher discovery weight helps Turing slightly but costs lock-out, so defaults were kept.
-- **Information-gain term:** no measurable effect at this scale (all differences inside the CIs). Honest finding: the exploit + discovery terms already place looks well; IG is a candidate for removal or re-tuning.
+**Ablations (what produces the gain), from this benchmark:**
+- **Micro dwell controller** (5 ms search looks, extend on partial pulses, stop on confirmation, reliable-dwell rule): easy 65.5 % → 72.3 %, lock-out 60.2 % → 69.1 %, pop-up 57.9 % → 61.6 %; neutral on dense, mixed and Turing. Time to first catch on easy 25.3 s → 16.6 s, lock-out 24.2 s → 17.2 s.
+- **Reliable-dwell rule** (a look only counts as evidence about an emitter if it comfortably holds that emitter's pulses): lifted real-data interception even without the micro controller (Turing 64.5 % → 69.0 %).
+- **Learned prior vs flat prior:** easy 72.3 % vs 58.5 %, Turing 69.8 % vs 67.3 %; lock-out is within noise.
+- **Value of resolving + appointment blocking** (earlier round): lock-out tracking 70 % → 95 %.
+- **Information-gain term:** no benefit. Removing it is slightly *better* on 5 of 6 families (e.g. lock-out 76.1 % vs 69.1 %, Turing 71.8 % vs 69.8 %), though the intervals overlap. It should be decided on the tuning scenarios, not on this benchmark, to avoid tuning on reported data.
+- **Parameter sweep** (`experiments/tune_wnew.py`): defaults `w_new = 2`, `stale = 2 s` are at the cross-family optimum.
 
 **Ideas tried and rejected (measured, then reverted or left off):**
 - **Search seeded with the learned frequency distribution** (78 % of emitters sit in 12 of 72 frequency cells). Worse on every scenario: Turing 64.5 % → 57.7 %, mixed 79.1 % → 47.7 %, easy 65.5 % → 34.6 %. Within a 30–60 s engagement it over-concentrates search on the busy bands and starves the rest. Kept as the `primes_fprior` ablation, off by default.
@@ -128,21 +134,21 @@ Other metrics:
 - **Online per-dwell detection calibration** (observed vs predicted detections, per dwell length). No measurable effect at 5 seeds (65.6 % vs 65.9 %); an apparent +1.6 points at 3 seeds was noise. Left off (`calibrate_dwells`).
 - Kept from that round: the on/off model now ignores dwells too short to hold the 3 pulses a detection needs (principled; no measurable change at the default dwell lengths), and the benchmark now reports **acquisition loss** and **tracked-flash capture** separately.
 
-**Where PRIMES does not win:** on `dense` (and marginally on real data) raster discovers slightly *more* emitters (76 % vs 69 %; 93 % vs 91 %) at the same time-to-first-intercept. PRIMES trades a little breadth of search for 3.8× the flashes intercepted. `w_new` moves along this trade-off.
+**Where PRIMES does not win:** on `dense` raster discovers slightly *more* emitters (76 % vs 70 %) at about the same time-to-first-intercept; PRIMES trades a little breadth of search for 6.7× the flashes intercepted there. On real data discovery is now equal (93 % vs 93 %). `w_new` moves along this trade-off.
 
 ## Known issues and caveats
 
 1. **DQN is a modest rival.** It matches the greedy bandit but not more; a stronger model-free baseline (longer training, recurrent policy) would make the comparison harder to dismiss. What exists is fair: same reward, same environment, best-on-validation checkpoint, held-out seeds.
-2. **Discovery breadth on `dense`** is below raster (69 % vs 76 %); on real data it is now within 2 points. Tunable via `w_new`.
-3. **Information gain adds nothing measurable** in the current setup; keep it in the architecture story as an ablated component, not as a claimed source of gain.
+2. **Discovery breadth on `dense`** is below raster (70 % vs 76 %); on real data it is now equal. Tunable via `w_new`.
+3. **Information gain adds nothing**, and removing it looks slightly better; decide on tuning scenarios, then either drop it or keep it as an ablated component. Do not claim it as a source of gain.
 4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Real deinterleaving is roadmap.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
-6. **Runtime:** PRIMES takes 25–50 s per 30 s Turing scenario in Python. Fine for replay and demo (results are cached); not real-time yet.
+6. **Runtime:** PRIMES takes tens of seconds to a few minutes per 30 s Turing scenario in Python (the micro controller makes more, shorter decisions). Fine for replay and demo (results are cached); not real-time yet: a porting task.
 7. **Simulator realism:** simulated flash emitters are idealised compared with Turing visibility. The `mixed` family and the Turing replays cover the gap.
 
 ## Next steps
 
-1. Open one PR from `feature/tracking-fix` into `main` (it contains every branch) and merge.
+1. Open one PR from `feature/accuracy` into `main` (it contains everything since the last merge) and merge.
 2. Put the benchmark numbers and the ablation findings on the slides; the benchmark page screenshots well.
 3. Optional improvements: tune `w_new` / `λ` on training seeds (Optuna); vectorise PRIMES across tracks for speed; stronger DQN; real deinterleaving instead of ideal association.
 

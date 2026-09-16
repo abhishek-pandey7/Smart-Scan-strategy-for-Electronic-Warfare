@@ -47,7 +47,7 @@ We measured the real emitter population (128,252 emitters from 2,500 scenarios) 
 | Alternative | Why not the answer |
 |---|---|
 | **Faster / optimised periodic sweep** (incl. Farey/Diophantine-optimal sweep periods) | Optimal only with a known threat list; the problem statement removes it. Retained as the **baseline** and as theory for the lock-out slide. |
-| **Deep RL over raw observations (DQN/PPO)** — the common hackathon answer and the current published ES approach | Sample-hungry: a 30–60 s engagement gives ~7 flashes per emitter, and the first 2–3 must be enough. Opaque to an operator, no worst-case guarantee. **Measured**: our fairly-tuned Double-DQN reaches 15–21 % vs PRIMES' 60–80 %. |
+| **Deep RL over raw observations (DQN/PPO)** — the common hackathon answer and the current published ES approach | Sample-hungry: a 30–60 s engagement gives ~7 flashes per emitter, and the first 2–3 must be enough. Opaque to an operator, no worst-case guarantee. **Measured**: our fairly-tuned Double-DQN reaches 4–21 % vs PRIMES' 62–79 %. |
 | **Greedy / hit-rate bandit** | Cannot represent *phase*: it knows a band was productive, not *when* it will be productive. Measured 8–20 %. |
 | **Exact POMDP solution** | Intractable at 36 centres × dozens of emitters with continuous timing state. |
 | **Restless bandit with a Gilbert–Elliott channel model only** (classical dynamic spectrum access) | Right control paradigm, wrong emitter model: a rotating radar is not a two-state Markov channel. We keep the paradigm and replace the model. |
@@ -58,7 +58,7 @@ We measured the real emitter population (128,252 emitters from 2,500 scenarios) 
 2. **A learned discrete prior over scan periods** (22 values, 96 % mass), fitted from an open dataset by streaming metadata — turning "unknown period" into a small hypothesis set that a couple of observations can resolve.
 3. **Two competing emitter models per track**, periodic flash vs Gilbert–Elliott on/off, arbitrated by Bayes factors from the same hits and misses. This is what makes the system work on real data rather than only on idealised scanners.
 4. **Value per unit receiver time**, not value per look: the scheduler compares "catch this emitter", "discover something new" and "learn a period" on one scale, divided by the time each option costs.
-5. **A micro dwell controller**: looks end early once an emitter is confirmed, extend when they hear part of a flash, and are never used on emitters whose pulses are too sparse to confirm in that time. **Measured +5.8 points** mean interception and ~40 % faster first catch.
+5. **A micro dwell controller**: looks end early once an emitter is confirmed, extend when they hear part of a flash, and are never used on emitters whose pulses are too sparse to confirm in that time. **Measured on the benchmark**: easy 65.5 % → 72.3 %, lock-out 60.2 % → 69.1 %, and time to first catch cut by 30–35 %.
 6. **Anti-synchronisation by construction**: dither in search mode, so the scheduler cannot fall into the lock-out trap that defeats open-loop sweeps.
 7. **Explainability as a first-class output**: every dwell decision carries the numbers that produced it, which is what makes an ML scheduler acceptable on mission hardware.
 
@@ -191,9 +191,9 @@ $$
 - **Staleness weight** `W_e(t)`: value grows with time since that emitter was last caught, so no single loud emitter can monopolise the receiver.
 - **Resolution value:** a catch on an unconfirmed periodic track is worth its own flash *plus* the future flashes that confirming the period would unlock. This is what makes PRIMES invest two cheap looks now to own an emitter for the rest of the mission (measured: lock-out tracking 70 % → 95 %).
 - **Appointments:** no dwell may run past a confident track's predicted flash unless it covers that emitter.
-- **Information gain** `IG`: expected bits about the timing hypotheses, in closed form for a binary outcome. *Measured honestly: no significant effect at this scale — kept as an ablated component, not claimed as a source of gain.*
+- **Information gain** `IG`: expected bits about the timing hypotheses, in closed form for a binary outcome. *Measured honestly: no benefit; removing it is slightly better on 5 of 6 scenario families within overlapping intervals. Kept as an ablated component and not claimed as a source of gain.*
 
-**Micro dwell controller** (measured +5.8 points, ~40 % faster first catch):
+**Micro dwell controller** (measured: lock-out 60.2 % → 69.1 %, easy 65.5 % → 72.3 %, first catch 30–35 % sooner):
 - **5 ms search looks** for a much faster sweep of the spectrum;
 - **extend** a look that heard 1–2 pulses near its end, counting pulses across the contiguous window;
 - **stop early** once an emitter is confirmed, returning the saved time to search;
@@ -333,22 +333,22 @@ Not a proposal: a working prototype with measured results.
 | Receiver model reverse-engineered from an open dataset | ✅ explains **99.987 %** of 22.7 M pulses |
 | Population priors fitted from 128,252 emitters | ✅ **96.2 %** of periods on 22 values |
 | Scheduler implemented end-to-end with two emitter models | ✅ 20 unit tests |
-| Benchmark vs 4 baselines + a trained Double-DQN + clairvoyant upper bound | ✅ 549 runs with 95 % bootstrap CIs (610-run refresh in progress) |
+| Benchmark vs 4 baselines + a trained Double-DQN + clairvoyant upper bound | ✅ 610 runs with 95 % bootstrap CIs, including 5 ablations |
 | Validation on **real dataset scenarios** (not only our simulator) | ✅ 11 scenarios, 35–100 emitters each |
 | Interactive demo (replay + benchmark pages) | ✅ FastAPI + Next.js |
 
-**Headline measured results** (previous full benchmark; the micro dwell controller adds a further **+5.8 points** mean on held-out tuning scenarios and is being re-benchmarked):
+**Headline measured results** (610-run benchmark, 10 seeds per simulated family, 11 real dataset scenarios):
 
 | Scenario | Open-loop raster | Greedy bandit | Double-DQN | **PRIMES** | Clairvoyant oracle |
 |---|---|---|---|---|---|
-| lock-out | 1.0 % | 7.6 % | 5.8 % | **60.2 %** | 98.3 % |
-| easy | 5.6 % | 14.4 % | 4.4 % | **65.5 %** | 96.1 % |
-| pop-up | 5.8 % | 10.8 % | 5.3 % | **57.9 %** | 97.6 % |
-| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **65.2 %** | 89.9 % |
-| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **79.1 %** | 94.3 % |
-| **real dataset scenarios** | 16.8 % | 20.3 % | 15.3 % | **64.5 %** | 84.8 % |
+| lock-out | 1.0 % | 7.6 % | 5.8 % | **69.1 %** | 98.3 % |
+| easy | 5.6 % | 14.4 % | 4.4 % | **72.3 %** | 96.1 % |
+| pop-up | 5.8 % | 10.8 % | 5.3 % | **61.6 %** | 97.6 % |
+| dense (40 emitters) | 9.9 % | 20.3 % | 20.7 % | **65.9 %** | 89.9 % |
+| mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **78.8 %** | 94.3 % |
+| **real dataset scenarios** | 16.8 % | 20.3 % | 15.3 % | **69.8 %** | 84.8 % |
 
-Supporting measurements: **92 % of lock-out emitters discovered** (raster 15 %); **89–100 %** of next-flash predictions within 10 ms on periodic emitters; **95–99.5 %** of an emitter's flashes caught once it is tracked; time to first catch on lock-out **55.7 s → 24.2 s** (and **→ 14.7 s** with the micro controller).
+Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %); **91–98 %** of next-flash predictions within 10 ms on periodic emitters; **85–96 %** of an emitter's flashes caught once it is tracked; time to first catch on lock-out **55.7 s → 17.2 s** and on easy **36.9 s → 16.6 s**. PRIMES' 95 % intervals do not overlap any non-oracle rival's on any family.
 
 ## 3.2 What the numbers do *not* claim
 
@@ -396,10 +396,10 @@ Supporting measurements: **92 % of lock-out emitters discovered** (raster 15 %);
 
 | Effect | Measured |
 |---|---|
-| **More of the electromagnetic picture** | 3.8× more radar flashes intercepted than the open-loop sweep on real scenarios (64.5 % vs 16.8 %) |
-| **Blind spots eliminated** | lock-out emitters go from 1 % of flashes and 1-in-6 discovered, to 60 %+ and 6-in-6 |
-| **Earlier warning** | time to first catch cut by up to 3.8× on adversarial cases (55.7 s → 14.7 s) |
-| **Better emitter parameters** | 95–99.5 % of a tracked emitter's flashes are caught, so PRI/scan/agility estimates rest on far more samples |
+| **More of the electromagnetic picture** | 4.2× more radar flashes intercepted than the open-loop sweep on real scenarios (69.8 % vs 16.8 %), 82 % of a clairvoyant scheduler |
+| **Blind spots eliminated** | lock-out emitters go from 1 % of flashes and 15 % discovered, to 69 % of flashes and 95 % discovered |
+| **Earlier warning** | time to first catch cut by up to 3.2× (lock-out 55.7 s → 17.2 s; easy 36.9 s → 16.6 s) |
+| **Better emitter parameters** | 85–96 % of a tracked emitter's flashes are caught on simulated scenarios, so PRI/scan/agility estimates rest on far more samples |
 | **Operator trust** | every dwell decision is explained in one line; the learned period of each radar is displayed against truth in the demo |
 
 Why each matters operationally: an ES system exists to answer *what is out there, where, and is it a threat now*. Flashes are the raw evidence for all three. Catching ~4× more of them, and catching the radars that a fixed sweep structurally cannot see, changes the quality of the tactical picture rather than just a metric.
@@ -455,8 +455,8 @@ Why each matters operationally: an ES system exists to answer *what is out there
 | 96.2 % of scan periods on 22 discrete values (128,252 emitters) | metadata streamed from 2,500 training scenarios | `primes/data/fit_priors.py` |
 | Real emitters: median 32 % visibility duty; only 12 % flash-like | illumination analysis of stare-mode truth | `DATASET_NOTES.md` |
 | Open-loop intercepts 6.3 % of narrow flashes / 11.5 % of all | exact replay of the real schedule on 11 scenarios | `DATASET_NOTES.md` |
-| PRIMES vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs | 549-run benchmark (610-run refresh in progress) | `experiments/benchmark.py`, `artifacts/benchmark.json` |
-| Component attribution: learned prior +20 points; information gain no effect; 4 further ideas measured and rejected | ablations and variant sweeps on disjoint tuning scenarios | `experiments/compare_variants.py`, `PROGRESS.md` |
+| PRIMES vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs, 5 ablations | 610-run benchmark | `experiments/benchmark.py`, `artifacts/benchmark.json` |
+| Component attribution: micro dwell controller +7–9 points on periodic scenarios; learned prior +14 points on easy; information gain no benefit; 5 further ideas measured and rejected | ablations and variant sweeps on disjoint tuning scenarios | `experiments/compare_variants.py`, `PROGRESS.md` |
 
 ## 5.3 Reproducibility
 
