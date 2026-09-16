@@ -30,6 +30,7 @@ VARIANTS = {
     "base_rt_cal": {"retune_s": 0.0005, "retune_in_index": False, "calibrate_dwells": True},
     "short5_rt_cal": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
                       "retune_in_index": False, "calibrate_dwells": True},
+    "threat": {"use_threat": True},
     "micro": {"micro_dwell": True},
     "micro_short5": {"micro_dwell": True, "dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100)},
     "short5_search_rt": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
@@ -52,7 +53,8 @@ def run(args):
     m = compute_metrics(replay(PrimesLite(**params), truth, pr, seed=seed), truth)
     return {"variant": variant, "scenario": scenario, "seed": seed, "params": {k: str(v) for k, v in params.items()},
             **{k: m[k] for k in ("interception_ratio", "discovery_fraction", "ttfi_mean_s",
-                                 "tracked_ratio", "pre_discovery_loss") if k in m}}
+                                 "tracked_ratio", "pre_discovery_loss", "threat_weighted_interception",
+                                 "high_threat_interception", "high_threat_ttfi_s", "threat_class_accuracy") if k in m}}
 
 
 def main() -> None:

@@ -38,6 +38,7 @@ class Look:
     t: float
     action: Action
     detections: dict[int, np.ndarray]    # emitter id -> received pulse ToAs (s); id -1 is a false alarm
+    pws: dict[int, np.ndarray] = field(default_factory=dict)     # emitter id -> measured pulse widths (µs)
     freqs: dict[int, np.ndarray] = field(default_factory=dict)   # emitter id -> measured pulse frequencies (MHz)
     partial: dict[int, float] = field(default_factory=dict)      # emitter id -> last pulse ToA, for 1..N_MIN-1 pulses seen
 
@@ -52,6 +53,7 @@ class EmitterInfo:
     appear_s: float = 0.0
     label: str = ""
     role: str = ""                       # scenario-specific tag, e.g. "lockout-exact"
+    threat: str = ""                     # truth threat level (low / medium / high); "" if unlabelled. Never shown to schedulers.
 
 
 @dataclass
@@ -65,6 +67,7 @@ class Truth:
     emitter: np.ndarray                  # int32
     emitters: list[EmitterInfo]
     flashes: dict[int, np.ndarray] = field(default_factory=dict)   # id -> (k, 4): start, end, n_pulses, freq
+    pw: np.ndarray | None = None         # float32 pulse width per pulse (µs), measured by the receiver
 
     def __post_init__(self) -> None:
         if not self.flashes:

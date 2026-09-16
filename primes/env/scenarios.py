@@ -9,6 +9,7 @@ import numpy as np
 from primes.core.types import (ACCEPT_HALF_WIDTH_MHZ, CENTRES_MHZ, N_CENTRES, RASTER_DWELL_S,
                                EmitterInfo, Truth)
 from primes.data.priors import Priors
+from primes.threat.taxonomy import threat_level
 
 SIM_FAMILIES = ("easy", "lockout", "popup", "dense", "mixed")
 MAX_PULSES_PER_FLASH = 200
@@ -27,6 +28,7 @@ class EmitterSpec:
     appear_s: float = 0.0
     label: str = ""
     role: str = ""
+    threat: str = ""
     mean_on_s: float = 1.0    # markov emitters: mean visible / invisible durations
     mean_off_s: float = 3.0
 
@@ -81,7 +83,7 @@ def build_truth(name: str, specs: list[EmitterSpec], horizon: float, rng: np.ran
     infos = [EmitterInfo(id=s.id, kind=s.kind, freqs_mhz=list(s.freqs_mhz),
                          period_s=s.period_s if s.kind == "circular" else None,
                          flash_s=s.flash_s if s.kind == "circular" else None,
-                         appear_s=s.appear_s, label=s.label, role=s.role) for s in specs]
+                         appear_s=s.appear_s, label=s.label, role=s.role, threat=s.threat) for s in specs]
     return Truth(name=name, horizon_s=horizon, toa=toa[order], freq=freq[order].astype(np.float32),
                  emitter=emitter[order].astype(np.int32), emitters=infos)
 
@@ -126,7 +128,8 @@ def _sample_population(priors: Priors, n: int, rng: np.random.Generator, first_i
             id=first_id + len(specs), kind="circular", freqs_mhz=list(priors.freqs_mhz[i]),
             freq_mode=priors.freq_mode[i], period_s=float(priors.period_s[i]),
             flash_s=float(max(priors.flash_s[i], 2e-4)), pri_s=float(priors.pri_s[i]),
-            phase_s=float(rng.uniform(0, priors.period_s[i])), label="population"))
+            phase_s=float(rng.uniform(0, priors.period_s[i])), label="population",
+            threat=threat_level(priors.function[i]) if priors.function else ""))
     return specs
 
 
