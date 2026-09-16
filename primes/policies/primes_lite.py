@@ -30,10 +30,14 @@ class PrimesLite(Policy):
                  stale_intermittent_s: float | None = None, dwells_s=PRIMES_DWELLS_S,
                  retune_in_index: bool = True, min_track_dwell_s: float = 0.0, calibrate_dwells: bool = False,
                  micro_dwell: bool = True, extend_s: float = 0.005, max_extensions: int = 3,
+                 use_threat: bool = False,
                  name: str | None = None):
         # Micro dwell controller: search looks end as soon as an emitter is confirmed, and a look that
         # heard 1-2 pulses near its end is extended on the same centre instead of hopping away.
         self.micro_dwell, self.extend_s, self.max_extensions = micro_dwell, extend_s, max_extensions
+        # Threat-aware priority: each emitter's value is scaled by the weight of its predicted threat class
+        # (learned classifier on the track's own observed PRI / PW / frequency / scan parameters).
+        self.use_threat = use_threat
         # Online calibration per dwell length: observed detections of known emitters / predicted ones.
         # Learns, e.g., that very short looks under-deliver on bursty real emitters.
         self.calibrate_dwells = calibrate_dwells
@@ -100,6 +104,8 @@ class PrimesLite(Policy):
             p, v, ig = tr.action_terms(t, self.dwells, self.ctx.horizon_s)
             stale = self.stale_s if tr.model == "periodic" else self.stale_intermittent_s
             g = min(1.0, (t - tr.last_hit) / stale)
+            if self.use_threat:
+                g *= tr.threat_weight
             exploit += np.outer(tr.cover, g * v)
             info += np.outer(tr.cover, ig)
             expected += np.outer(tr.cover, p)
@@ -168,7 +174,12 @@ class PrimesLite(Policy):
             if history is None:
                 history = (np.array(self.look_t), np.array(self.look_d), np.array(self.look_c))
             new_flash = tr.hit(look.t, a.dwell_s, look.detections[e],
-                               look.freqs.get(e, np.array([CENTRES_MHZ[a.centre]])), history, look_index=idx)
+                               look.freqs.get(e, np.array([CENTRES_MHZ[a.centre]])), history, look_index=idx,
+                               pws=look.pws.get(e))
+            if new_flash and self.use_threat:
+                tr.update_threat()
+                if tr.threat_probs is not None:
+                    self.logs.threats.append((look.t, e, [round(float(x), 3) for x in tr.threat_probs]))
             if new_flash and len(tr.anchors) >= 2:
                 t_end = look.t + a.dwell_s
                 nxt = tr.next_flash(t_end + 0.02)

@@ -147,3 +147,14 @@ table.data tr.highlight td { font-weight: 600; }
 .explainer div { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; }
 .explainer strong { display: block; margin-bottom: 2px; }
 .live-count { float: right; font-size: 13px; font-weight: 500; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+
+/* scenario briefing */
+.brief h2 { margin-bottom: 10px; }
+.brief-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 1000px) { .brief-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 600px) { .brief-grid { grid-template-columns: 1fr; } }
+.brief-grid div { display: flex; flex-direction: column; gap: 3px; }
+.brief-grid strong { font-size: 12px; color: var(--text-primary); }
+.brief-grid span { color: var(--text-secondary); font-size: 13px; }
+.brief-facts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.brief { margin-bottom: 16px; }
