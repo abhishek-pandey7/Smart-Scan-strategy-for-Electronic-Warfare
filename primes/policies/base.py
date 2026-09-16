@@ -25,6 +25,7 @@ class PolicyLogs:
     tracks: list[tuple[float, int, float, float]] = field(default_factory=list)  # (t, emitter, period estimate, confidence)
     threats: list[tuple[float, int, list[float]]] = field(default_factory=list)   # (t, emitter, [p_low, p_medium, p_high])
     rejections: list[tuple[float, int, float]] = field(default_factory=list)      # (t, emitter, seconds since first detection) when a track is dropped
+    association: list[tuple[int, dict[int, int]]] = field(default_factory=list)  # (track id, {truth emitter: pulses}) per detection; scoring only
 
 
 class Policy:

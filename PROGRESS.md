@@ -18,6 +18,7 @@ _Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 
 | Frontend head-to-head banner (live "N× more" factor) | ✅ done |
 | Threat-aware scheduling (taxonomy, classifier, metrics, variant) | ✅ measured; variant `primes_threat`, off by default |
 | Robustness sweep (P_d, P_fa) | ✅ 1,008 runs, `artifacts/robustness.json` |
+| Realistic association (own deinterleaving from unlabelled PDWs) | ✅ `primes_pdw`: −0.8 points mean, none on real scenarios |
 
 ## Where things are
 
@@ -160,12 +161,28 @@ Other metrics:
 - False alarms are now modelled as new emitters (unique id, plausible pulse train, random in-band frequency), not as ignorable noise.
 - Track existence odds (`use_existence`) reject false tracks but discount real emitters caught only once (easy, seed 0: 85.6 % → 66.1 %), so they are off by default.
 
+## Realistic pulse association
+
+The scheduler receives only unlabelled pulse descriptor words (ToA, frequency, pulse width, AoA). Within a dwell it groups pulses by bearing and splits groups whose frequencies are further apart than one agile emitter spans (1.1 GHz). Across dwells a group joins the track whose AoA gate, centred on an alpha-beta predicted bearing and widened with time since last heard, contains it; pulse width only breaks ties. This design came from measuring the real PDWs: bearing is the stable key (1–6° spread per dwell); pulse width is not, because many radars interleave several width modes within milliseconds; hoppers span up to 1 GHz; and close fly-bys sweep >10°/s.
+
+| Tuning scenarios (3 each) | Labelled pulses (ideal) | **Own deinterleaving** | Pulse purity | Tracks per real emitter |
+|---|---|---|---|---|
+| easy | 64.8 % | **64.8 %** | 1.000 | 1.00 |
+| lockout | 74.8 % | **74.8 %** | 1.000 | 1.00 |
+| popup | 73.7 % | **73.1 %** | 0.988 | 1.00 |
+| dense (40 emitters) | 70.1 % | **67.6 %** | 0.994 | 1.18 |
+| mixed | 79.8 % | **76.7 %** | 0.988 | 1.22 |
+| real Turing scenarios (PDWs with the dataset's own noise) | 73.0 % | **74.3 %** | 0.990 | 1.21 |
+| **mean** | 72.7 % | **71.9 %** | | |
+
+Truth labels are still used for scoring (was the emitter physically intercepted) and for the association-quality log, never for decisions. Stop-on-detect dwells in this mode end when a *feature cluster* reaches 3 pulses, not a truth emitter.
+
 ## Known issues and caveats
 
 1. **DQN is a modest rival.** It matches the greedy bandit but not more; a stronger model-free baseline (longer training, recurrent policy) would make the comparison harder to dismiss. What exists is fair: same reward, same environment, best-on-validation checkpoint, held-out seeds.
 2. **Discovery breadth on `dense`** is below raster (70 % vs 76 %); on real data it is now equal. Tunable via `w_new`.
 3. **Information gain adds nothing**, and removing it looks slightly better; decide on tuning scenarios, then either drop it or keep it as an ablated component. Do not claim it as a source of gain.
-4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Next item: realistic association from noisy PDWs.
+4. **Association:** the default `primes` still uses labelled pulses so the 610-run benchmark stays comparable; `primes_pdw` deinterleaves for itself and costs 0.8 points on tuning scenarios. To be included in the next full benchmark.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
 6. **Runtime:** PRIMES takes tens of seconds to a few minutes per 30 s Turing scenario in Python (the micro controller makes more, shorter decisions). Fine for replay and demo (results are cached); not real-time yet: a porting task.
 7. **Simulator realism:** simulated flash emitters are idealised compared with Turing visibility. The `mixed` family and the Turing replays cover the gap.

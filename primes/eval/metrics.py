@@ -36,6 +36,32 @@ def _rejection_time(trace: Trace, real_ids: set[int]) -> float | None:
     return float(np.mean(times)) if times else None
 
 
+def _association(trace: Trace) -> dict:
+    """Deinterleaving quality from the scheduler's own track ids vs the truth emitters of their pulses."""
+    log = trace.logs.association
+    if not log:
+        return {"association_purity": None, "tracks_per_emitter": None, "contaminated_tracks": None}
+    total = pure = 0
+    per_track: dict[int, dict[int, int]] = {}
+    for tid, counts in log:
+        n = sum(counts.values())
+        total += n
+        pure += max(counts.values())
+        acc = per_track.setdefault(tid, {})
+        for e, k in counts.items():
+            acc[e] = acc.get(e, 0) + k
+    owner: dict[int, set[int]] = {}
+    contaminated = 0
+    for tid, acc in per_track.items():
+        e, k = max(acc.items(), key=lambda kv: kv[1])
+        contaminated += k < 0.9 * sum(acc.values())
+        if e >= 0:
+            owner.setdefault(e, set()).add(tid)
+    return {"association_purity": pure / total if total else None,
+            "tracks_per_emitter": float(np.mean([len(v) for v in owner.values()])) if owner else None,
+            "contaminated_tracks": contaminated / len(per_track)}
+
+
 def _threat_accuracy(trace: Trace, threat: dict[int, str]) -> float | None:
     """Share of labelled tracks whose latest predicted threat level matches the truth."""
     latest: dict[int, list[float]] = {}
@@ -125,6 +151,7 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         "threat_class_accuracy": _threat_accuracy(trace, threat),
         "false_alarm_rejection_s": _rejection_time(trace, real_ids={e.id for e in truth.emitters}),
         "real_tracks_dropped": sum(1 for _, e, _ in trace.logs.rejections if e >= 0),
+        **_association(trace),
         "pre_discovery_loss": n_pre / n_able if n_able else 0.0,
         "interception_ratio_per_emitter": float(np.mean(per_emitter_ratio)) if per_emitter_ratio else 0.0,
         "emitters_discovered": int(len(discovered)),
