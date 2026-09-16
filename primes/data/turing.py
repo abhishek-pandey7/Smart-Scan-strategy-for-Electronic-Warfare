@@ -56,4 +56,4 @@ def load_stare(config: int, split: str = "val_stare") -> Truth:
     return Truth(name=f"turing:val_stare/config_{config}", horizon_s=COLLECTION_S,
                  toa=toa[keep][order], freq=data[keep, 1][order].astype(np.float32),
                  emitter=labels[keep][order], emitters=[e for e in infos if e.id in present],
-                 pw=data[keep, 2][order].astype(np.float32))
+                 pw=data[keep, 2][order].astype(np.float32), aoa=data[keep, 3][order].astype(np.float32))

@@ -24,6 +24,7 @@ POLICY_INFO = {
     "primes_no_micro": "PRIMES-lite ablation: no micro dwell controller (no 5 ms search looks)",
     "primes_threat": "PRIMES-lite variant: emitter priority scaled by predicted threat level",
     "primes_exist": "PRIMES-lite variant: tracks weighted by estimated existence probability (false-alarm rejection)",
+    "primes_pdw": "PRIMES-lite with its own deinterleaving: unlabelled pulses clustered by frequency, AoA and pulse width",
     "oracle": "Clairvoyant reference: sees the truth (upper bound)",
 }
 
@@ -69,6 +70,8 @@ def make_policy(name: str) -> Policy:
         return PrimesLite(use_existence=True, name="primes_exist")
     if name == "primes_threat":
         return PrimesLite(use_threat=True, name="primes_threat")
+    if name == "primes_pdw":
+        return PrimesLite(association="pdw", name="primes_pdw")
     if name == "primes_no_micro":
         from primes.core.types import DWELL_OPTIONS_S
         return PrimesLite(micro_dwell=False, dwells_s=DWELL_OPTIONS_S, name="primes_no_micro")

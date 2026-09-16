@@ -22,7 +22,7 @@ Side-by-side, same scenario, same truth:
 |---|---|
 | Circular-scan periodic emitters (fixed, multi-frequency, hopping), omni, **intermittent on/off (Markov)** and pop-up emitters | Aperiodic / Poisson, full agility models |
 | Turing receiver replica: 36 centres, ±500 MHz, exact 2.15 s raster schedule | Wideband cueing receiver, multi-receiver |
-| **Ideal association:** detected pulses carry emitter IDs (upstream deinterleaver assumed) | PDW-noise association / DBSCAN / learned embeddings |
+| **Association:** default replays use labelled pulses; `primes_pdw` deinterleaves unlabelled PDWs itself (measured −0.8 points) | learned embeddings (transformer metric learning) |
 | **Learned priors** from 2,500 Turing training scenarios (HF API) | Empirical-Bayes refits from field logs |
 | PRIMES-lite: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
 | Baselines: raster, random, greedy bandit, oracle; **Double-DQN comparator** (SB3) | Farey sweep, residual RL + shield |
@@ -158,6 +158,18 @@ for t in engagement:
 
 **Optional variants** (off by default, measured): `use_threat` scales each track's value by its expected threat weight from `primes/threat/model.py`; `use_existence` discounts each track by its probability of being real (log-odds raised by repeat hits, lowered by reliable misses).
 
+**Own deinterleaving** (`association="pdw"`, `primes/associate/`). The scheduler receives only unlabelled pulse descriptor words (ToA, frequency, pulse width, AoA). Within a dwell it groups pulses by bearing and splits groups whose frequencies are further apart than one agile emitter spans (1.1 GHz). Across dwells a group joins the track whose AoA gate, centred on an alpha-beta predicted bearing and widened with time since last heard, contains it; pulse width only breaks ties. This design came from measuring the real PDWs: bearing is the stable key (1–6° spread per dwell); pulse width is not, because many radars interleave several width modes within milliseconds; hoppers span up to 1 GHz; and close fly-bys sweep >10°/s. The receiver fills `Look.pdw` in this mode; truth detections are still kept for scoring. Simulated scenarios get a per-emitter bearing and pulse width plus measurement noise (AoA σ 2°, PW 3 %, frequency 1 MHz), seeded from the scenario name.
+
+| Tuning scenarios (3 each) | Labelled pulses (ideal) | **Own deinterleaving** | Pulse purity | Tracks per real emitter |
+|---|---|---|---|---|
+| easy | 64.8 % | **64.8 %** | 1.000 | 1.00 |
+| lockout | 74.8 % | **74.8 %** | 1.000 | 1.00 |
+| popup | 73.7 % | **73.1 %** | 0.988 | 1.00 |
+| dense (40 emitters) | 70.1 % | **67.6 %** | 0.994 | 1.18 |
+| mixed | 79.8 % | **76.7 %** | 0.988 | 1.22 |
+| real Turing scenarios (PDWs with the dataset's own noise) | 73.0 % | **74.3 %** | 0.990 | 1.21 |
+| **mean** | 72.7 % | **71.9 %** | | |
+
 ### 6. Metrics (`primes/eval/metrics.py`)
 
 | Metric | Definition |
@@ -173,6 +185,7 @@ for t in engagement:
 | False alarms | false detections per run; each gets a unique id and a plausible pulse train, so it looks like a new emitter |
 | False-alarm rejection time / real tracks dropped | time until a false track's existence odds fall below threshold; real tracks wrongly marked dead |
 | Threat-weighted / high-threat interception, high-threat TTFI | interception weighted 0.3 / 1 / 3 by threat level; high-threat subset only |
+| Association purity / tracks per emitter / contaminated tracks | share of detection pulses from each track's majority emitter; distinct tracks per real emitter; tracks whose majority emitter holds < 90 % of pulses |
 | Threat class accuracy | share of tracks whose online predicted threat level matches the label |
 
 Reported as mean ± 95 % bootstrap CI over **10 seeds**.

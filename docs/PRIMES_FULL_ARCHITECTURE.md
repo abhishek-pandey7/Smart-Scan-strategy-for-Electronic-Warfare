@@ -337,6 +337,7 @@ Not a proposal: a working prototype with measured results.
 | Benchmark vs 4 baselines + a trained Double-DQN + clairvoyant upper bound | ✅ 610 runs with 95 % bootstrap CIs, including 5 ablations |
 | Validation on **real dataset scenarios** (not only our simulator) | ✅ 11 scenarios, 35–100 emitters each |
 | Robustness to missed detections and false alarms | ✅ 1,008-run sweep, 7 conditions |
+| Works from unlabelled pulses (own deinterleaving), not truth labels | ✅ −0.8 points mean; none on real PDWs |
 | Threat-aware priority from observed parameters | ✅ classifier + scheduler profile, measured |
 | Interactive demo (replay + benchmark pages) | ✅ FastAPI + Next.js |
 
@@ -368,6 +369,20 @@ Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %);
 - **Missed detections degrade PRIMES gracefully, in step with the physics.** At P_d = 0.5, half of all flashes are unobservable even to the clairvoyant oracle. PRIMES keeps 0.67 of the oracle's score and stays **6.5–7× raster** throughout. Its evidence model treats a miss as `(1 − P_d)` evidence, so a missed flash weakens a timing hypothesis instead of deleting it.
 - **False alarms cost little at realistic rates.** Up to ~23 false emitters per run, interception falls by at most 2 points. Only at a stress rate (~70 per run) does it fall to 58 %. On real scenarios it falls just 3 points, to 66.8 %, because real emitters there give their tracks repeated hits that false tracks never get. PRIMES is still 5.7× raster at the stress rate.
 - **Open-loop raster is unaffected by false alarms only because it ignores what it hears**, which is also why it catches 10 %.
+
+**Own deinterleaving instead of labelled pulses** (tuning scenarios, disjoint from the benchmark). The scheduler receives only unlabelled pulse descriptor words (ToA, frequency, pulse width, AoA). Within a dwell it groups pulses by bearing and splits groups whose frequencies are further apart than one agile emitter spans (1.1 GHz). Across dwells a group joins the track whose AoA gate, centred on an alpha-beta predicted bearing and widened with time since last heard, contains it; pulse width only breaks ties. This design came from measuring the real PDWs: bearing is the stable key (1–6° spread per dwell); pulse width is not, because many radars interleave several width modes within milliseconds; hoppers span up to 1 GHz; and close fly-bys sweep >10°/s.
+
+| Tuning scenarios (3 each) | Labelled pulses (ideal) | **Own deinterleaving** | Pulse purity | Tracks per real emitter |
+|---|---|---|---|---|
+| easy | 64.8 % | **64.8 %** | 1.000 | 1.00 |
+| lockout | 74.8 % | **74.8 %** | 1.000 | 1.00 |
+| popup | 73.7 % | **73.1 %** | 0.988 | 1.00 |
+| dense (40 emitters) | 70.1 % | **67.6 %** | 0.994 | 1.18 |
+| mixed | 79.8 % | **76.7 %** | 0.988 | 1.22 |
+| real Turing scenarios (PDWs with the dataset's own noise) | 73.0 % | **74.3 %** | 0.990 | 1.21 |
+| **mean** | 72.7 % | **71.9 %** | | |
+
+Where emitters are crowded (`dense`, `mixed`), co-bearing emitters occasionally merge and some fragment, costing 2–3 points. On real PDWs, the tracks that fragment are mostly fly-bys and multi-mode radars, and the net effect is within noise.
 
 **Threat-aware priority** (tuning scenarios, disjoint from the benchmark):
 
@@ -405,7 +420,7 @@ Each radar type in the dataset has one parameter template, so the classifier beh
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | **Missed detections / false alarms** in a real front-end | Certain | Measured graceful degradation: P_d = 0.5 keeps 0.67 of oracle; ≤ 2-point loss at realistic false-alarm rates. The evidence model is P_d-aware |
-| **Real deinterleaving is imperfect** (prototype assumes emitter identity is resolved upstream) | High | The dataset used exists precisely to benchmark deinterleavers; a learned or classical deinterleaver plugs into L2. Evaluate with a truth-association oracle to bound the loss. |
+| **Real deinterleaving is imperfect** | High | Measured: with its own deinterleaving from unlabelled PDWs, PRIMES loses 0.8 points on average vs truth labels (72.7 % → 71.9 %), and none on real dataset scenarios. A learned deinterleaver can replace the rule-based one in L2 |
 | **Real-time budget on embedded hardware** | Medium | Bounded per-decision cost by design; ONNX/C++ port; hardware-in-the-loop test on an SDR |
 | **Domain gap between simulator and a specific platform** | Medium | Validated on an independent dataset already; simulator parameters are fitted, not invented; priors refit per theatre |
 | **Adversary exploits the learned behaviour** | Low–Medium | Staleness governor, dither, per-track time caps, evidence floors (§2.7) |
@@ -479,7 +494,7 @@ Why each matters operationally: an ES system exists to answer *what is out there
 | Russo & Van Roy, *Learning to optimize via information-directed sampling*, Operations Research, 2018 | Information-value term in the score |
 | *Machine Learning-based Receiver Scheduling for Electronic Support* (Double-DQN), IEEE Xplore 11310649 | The current published ML approach — reimplemented as our comparator |
 | The Alan Turing Institute, *The Turing Synthetic Radar Dataset*, arXiv:2602.03856 | Independent emitter population and ground truth |
-| *Radar Pulse Deinterleaving with Transformer-Based Deep Metric Learning*, arXiv:2503.13476 | Route to replacing the ideal-association assumption |
+| *Radar Pulse Deinterleaving with Transformer-Based Deep Metric Learning*, arXiv:2503.13476 | Learned replacement for our rule-based bearing/frequency deinterleaver |
 | RFRL Gym (Virginia Tech NSI), arXiv:2401.05406 | Reference point for RF RL environments |
 
 ## 5.2 Our own measurements (reproducible from this repository)
@@ -493,6 +508,7 @@ Why each matters operationally: an ES system exists to answer *what is out there
 | PRIMES vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs, 5 ablations | 610-run benchmark | `experiments/benchmark.py`, `artifacts/benchmark.json` |
 | PRIMES keeps 0.67–0.75 of oracle interception from P_d = 1 down to 0.5, and loses ≤ 2 points up to ~23 false alarms per run | 1,008-run robustness sweep | `experiments/robustness.py`, `artifacts/robustness.json` |
 | Threat priority: real-scenario high-threat interception 69.7 % → 77.6 %, first catch 9.8 → 7.7 s; unseen-type threat level 63 % vs 48.5 % chance | variant sweep; leave-one-radar-type-out | `experiments/compare_variants.py`, `primes/threat/train.py`, `artifacts/threat_loto.json` |
+| Own deinterleaving from unlabelled PDWs costs 0.8 interception points on average (none on real scenarios); purity 0.99, 1.0–1.2 tracks per emitter | variant sweep on tuning scenarios; raster-fed association harness | `primes/associate/`, `experiments/association_quality.py` |
 | Component attribution: micro dwell controller +7–9 points on periodic scenarios; learned prior +14 points on easy; information gain no benefit; 5 further ideas measured and rejected | ablations and variant sweeps on disjoint tuning scenarios | `experiments/compare_variants.py`, `PROGRESS.md` |
 
 ## 5.3 Reproducibility

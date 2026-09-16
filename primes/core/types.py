@@ -41,6 +41,10 @@ class Look:
     pws: dict[int, np.ndarray] = field(default_factory=dict)     # emitter id -> measured pulse widths (µs)
     freqs: dict[int, np.ndarray] = field(default_factory=dict)   # emitter id -> measured pulse frequencies (MHz)
     partial: dict[int, float] = field(default_factory=dict)      # emitter id -> last pulse ToA, for 1..N_MIN-1 pulses seen
+    # Unlabelled pulse descriptor words heard in the whole listening window, (n, 4): ToA s, freq MHz, PW µs, AoA deg.
+    # Only filled for schedulers that deinterleave for themselves; replay clears it after the update.
+    pdw: np.ndarray | None = None
+    pdw_truth: np.ndarray | None = None  # truth emitter id per PDW row: for association metrics only, never for decisions
 
 
 @dataclass
@@ -68,6 +72,7 @@ class Truth:
     emitters: list[EmitterInfo]
     flashes: dict[int, np.ndarray] = field(default_factory=dict)   # id -> (k, 4): start, end, n_pulses, freq
     pw: np.ndarray | None = None         # float32 pulse width per pulse (µs), measured by the receiver
+    aoa: np.ndarray | None = None        # float32 angle of arrival per pulse (deg), measured by the receiver
 
     def __post_init__(self) -> None:
         if not self.flashes:
