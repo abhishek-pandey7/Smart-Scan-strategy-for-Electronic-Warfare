@@ -191,6 +191,7 @@ $$
 - **Staleness weight** `W_e(t)`: value grows with time since that emitter was last caught, so no single loud emitter can monopolise the receiver.
 - **Resolution value:** a catch on an unconfirmed periodic track is worth its own flash *plus* the future flashes that confirming the period would unlock. This is what makes PRIMES invest two cheap looks now to own an emitter for the rest of the mission (measured: lock-out tracking 70 % → 95 %).
 - **Appointments:** no dwell may run past a confident track's predicted flash unless it covers that emitter.
+- **Threat priority (optional mission profile):** `W_e(t)` can be multiplied by the emitter's *expected* threat weight (low 0.3 / medium 1 / high 3). The weight comes from a classifier over what the receiver has actually measured about that emitter: frequency, PRI set, pulse widths, scan period and flash width. The estimate firms up as evidence accumulates and is blended toward 1 while uncertain. *Measured: it moves receiver time toward high-threat radars on real scenarios but costs overall interception on crowded simulated ones, so it is a switch, not the default (§3.1).*
 - **Information gain** `IG`: expected bits about the timing hypotheses, in closed form for a binary outcome. *Measured honestly: no benefit; removing it is slightly better on 5 of 6 scenario families within overlapping intervals. Kept as an ablated component and not claimed as a source of gain.*
 
 **Micro dwell controller** (measured: lock-out 60.2 % → 69.1 %, easy 65.5 % → 72.3 %, first catch 30–35 % sooner):
@@ -258,7 +259,7 @@ A learned scheduler on mission hardware must answer "how can this fail, and who 
 
 **Adversarial robustness (the ML-specific threat)**
 - **Bait/decoy emitters** designed to monopolise a learned scheduler: bounded by the **staleness weight** (an emitter's value decays right after it is caught) and by a **cap on the share of receiver time any one track can draw**.
-- **Denial by false alarms / jamming:** false detections enter a clutter track; the miss/hit evidence is floored so no single observation can veto a hypothesis; κ and dwell-reliability estimators are clipped to sane ranges.
+- **Denial by false alarms / jamming:** in evaluation a false alarm is deliberately made to look like a *new emitter* (plausible pulse train, in-band frequency), so the scheduler has to spend time on it. Each track carries existence log-odds that repeat hits raise and reliable misses lower. Miss/hit evidence is floored so no single observation can veto a hypothesis, and κ and dwell-reliability estimators are clipped to sane ranges. *Measured: ~23 false alarms per run cost 2 interception points; a stress rate of ~70 per run costs 11 points pooled and 3 points on real scenarios (§3.1).*
 - **Blind-spot creation:** the **staleness governor** enforces a hard maximum revisit interval per band — a deterministic guarantee that no band goes unobserved beyond `τ_crit`, independent of what the learned layer wants.
 - **Model poisoning via field logs:** logs refit *priors* only, offline, with censoring-aware estimation and human review; they never rewrite a live policy.
 
@@ -335,6 +336,8 @@ Not a proposal: a working prototype with measured results.
 | Scheduler implemented end-to-end with two emitter models | ✅ 20 unit tests |
 | Benchmark vs 4 baselines + a trained Double-DQN + clairvoyant upper bound | ✅ 610 runs with 95 % bootstrap CIs, including 5 ablations |
 | Validation on **real dataset scenarios** (not only our simulator) | ✅ 11 scenarios, 35–100 emitters each |
+| Robustness to missed detections and false alarms | ✅ 1,008-run sweep, 7 conditions |
+| Threat-aware priority from observed parameters | ✅ classifier + scheduler profile, measured |
 | Interactive demo (replay + benchmark pages) | ✅ FastAPI + Next.js |
 
 **Headline measured results** (610-run benchmark, 10 seeds per simulated family, 11 real dataset scenarios):
@@ -350,10 +353,41 @@ Not a proposal: a working prototype with measured results.
 
 Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %); **91–98 %** of next-flash predictions within 10 ms on periodic emitters; **85–96 %** of an emitter's flashes caught once it is tracked; time to first catch on lock-out **55.7 s → 17.2 s** and on easy **36.9 s → 16.6 s**. PRIMES' 95 % intervals do not overlap any non-oracle rival's on any family.
 
+**Robustness to imperfect detection.** 1,008 runs: 7 conditions × 4 policies × 25 simulated and 11 real scenarios. Each condition varies one factor; interception is pooled over all 36 scenarios.
+
+| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+|---|---|---|---|---|---|---|
+| nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
+| P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
+| P_d = 0.7 | 8.2 % | 13.9 % | **55.5 %** [51.7, 59.2] | 77.4 % | 0.72 | 56.9 % |
+| P_d = 0.5 | 6.3 % | 12.4 % | **44.4 %** [40.3, 48.8] | 66.5 % | 0.67 | 48.2 % |
+| P_fa = 0.001 per look (~5 false alarms / run) | 10.3 % | 15.6 % | **68.1 %** [65.0, 71.0] | 91.6 % | 0.74 | 69.7 % |
+| P_fa = 0.005 (~23 / run) | 10.3 % | 16.6 % | **66.8 %** [62.7, 70.8] | 91.6 % | 0.73 | 70.3 % |
+| P_fa = 0.02 (~70 / run, stress) | 10.3 % | 16.4 % | **58.4 %** [54.0, 62.9] | 91.6 % | 0.64 | 66.8 % |
+
+- **Missed detections degrade PRIMES gracefully, in step with the physics.** At P_d = 0.5, half of all flashes are unobservable even to the clairvoyant oracle. PRIMES keeps 0.67 of the oracle's score and stays **6.5–7× raster** throughout. Its evidence model treats a miss as `(1 − P_d)` evidence, so a missed flash weakens a timing hypothesis instead of deleting it.
+- **False alarms cost little at realistic rates.** Up to ~23 false emitters per run, interception falls by at most 2 points. Only at a stress rate (~70 per run) does it fall to 58 %. On real scenarios it falls just 3 points, to 66.8 %, because real emitters there give their tracks repeated hits that false tracks never get. PRIMES is still 5.7× raster at the stress rate.
+- **Open-loop raster is unaffected by false alarms only because it ignores what it hears**, which is also why it catches 10 %.
+
+**Threat-aware priority** (tuning scenarios, disjoint from the benchmark):
+
+| | PRIMES | PRIMES + threat priority |
+|---|---|---|
+| Real scenarios: high-threat flashes intercepted | 69.7 % | **77.6 %** |
+| Real scenarios: time to first catch of a high-threat radar | 9.8 s | **7.7 s** |
+| Real scenarios: all flashes intercepted | 73.0 % | 75.1 % |
+| Simulated `mixed` / `lockout`: all flashes intercepted | 79.4 % / 75.6 % | 69.0 % / 67.5 % |
+
+On real data, prioritising improves both the threat metric and the overall one. On crowded simulated scenarios it diverts time from search, so it ships as an operator-selectable mission profile.
+
+Each radar type in the dataset has one parameter template, so the classifier behind the profile identifies a *known* type essentially perfectly. The harder test is a type it has **never seen**. Leaving each of the 68 types out in turn, it predicts the threat level correctly **63 %** of the time vs 48.5 % chance. The priority it assigns is correctly ordered on average: low 1.04, medium 1.54, high 2.26.
+
 ## 3.2 What the numbers do *not* claim
 
 - The clairvoyant oracle (85–98 %) is **not** an achievable target: it is handed the truth.
 - The residual ~20 % gap on simulated scenarios is dominated by flashes that occur **before** a blind search first finds an emitter — a physical limit of one narrowband receiver, not a tuning failure.
+- Robustness figures vary **one** impairment at a time; combined low P_d *and* high P_fa is not yet measured.
+- **Track existence weighting** (discounting a track by its probability of being a real emitter) was implemented and measured. It rejects false tracks, but on clean scenarios it also discounts real emitters caught only once (easy, seed 0: 85.6 % → 66.1 %). It is **off by default**; the unweighted scheduler already tolerates realistic false-alarm rates (table above).
 - The information-gain term shows **no measurable benefit**; three other ideas (frequency-seeded search, faster revisits for intermittent emitters, a per-discovery bookkeeping change) were measured and **rejected**. Reporting them is deliberate: it shows the tuning was evidence-driven.
 
 ## 3.3 Resource feasibility
@@ -370,6 +404,7 @@ Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %);
 
 | Risk | Likelihood | Mitigation |
 |---|---|---|
+| **Missed detections / false alarms** in a real front-end | Certain | Measured graceful degradation: P_d = 0.5 keeps 0.67 of oracle; ≤ 2-point loss at realistic false-alarm rates. The evidence model is P_d-aware |
 | **Real deinterleaving is imperfect** (prototype assumes emitter identity is resolved upstream) | High | The dataset used exists precisely to benchmark deinterleavers; a learned or classical deinterleaver plugs into L2. Evaluate with a truth-association oracle to bound the loss. |
 | **Real-time budget on embedded hardware** | Medium | Bounded per-decision cost by design; ONNX/C++ port; hardware-in-the-loop test on an SDR |
 | **Domain gap between simulator and a specific platform** | Medium | Validated on an independent dataset already; simulator parameters are fitted, not invented; priors refit per theatre |
@@ -456,6 +491,8 @@ Why each matters operationally: an ES system exists to answer *what is out there
 | Real emitters: median 32 % visibility duty; only 12 % flash-like | illumination analysis of stare-mode truth | `DATASET_NOTES.md` |
 | Open-loop intercepts 6.3 % of narrow flashes / 11.5 % of all | exact replay of the real schedule on 11 scenarios | `DATASET_NOTES.md` |
 | PRIMES vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs, 5 ablations | 610-run benchmark | `experiments/benchmark.py`, `artifacts/benchmark.json` |
+| PRIMES keeps 0.67–0.75 of oracle interception from P_d = 1 down to 0.5, and loses ≤ 2 points up to ~23 false alarms per run | 1,008-run robustness sweep | `experiments/robustness.py`, `artifacts/robustness.json` |
+| Threat priority: real-scenario high-threat interception 69.7 % → 77.6 %, first catch 9.8 → 7.7 s; unseen-type threat level 63 % vs 48.5 % chance | variant sweep; leave-one-radar-type-out | `experiments/compare_variants.py`, `primes/threat/train.py`, `artifacts/threat_loto.json` |
 | Component attribution: micro dwell controller +7–9 points on periodic scenarios; learned prior +14 points on easy; information gain no benefit; 5 further ideas measured and rejected | ablations and variant sweeps on disjoint tuning scenarios | `experiments/compare_variants.py`, `PROGRESS.md` |
 
 ## 5.3 Reproducibility
