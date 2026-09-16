@@ -156,6 +156,8 @@ for t in engagement:
     tracks.update(look); undiscovered.update(look); t += d + τ
 ```
 
+**Optional variants** (off by default, measured): `use_threat` scales each track's value by its expected threat weight from `primes/threat/model.py`; `use_existence` discounts each track by its probability of being real (log-odds raised by repeat hits, lowered by reliable misses).
+
 ### 6. Metrics (`primes/eval/metrics.py`)
 
 | Metric | Definition |
@@ -167,9 +169,25 @@ for t in engagement:
 | % correct predictions | at each hit on a track with ≥ 2 flashes, predicted next flash within ±10 ms of the actual |
 | Average intercept time error | mean ‖predicted − actual next flash‖ |
 | Average reward | intercepts per second of receiver time |
-| P_d / P_fa | configured; small sweep of P_d ∈ {1.0, 0.9, 0.7} |
+| P_d / P_fa | swept: P_d ∈ {1, 0.9, 0.7, 0.5}, P_fa ∈ {0, 0.001, 0.005, 0.02} per look (`experiments/robustness.py`) |
+| False alarms | false detections per run; each gets a unique id and a plausible pulse train, so it looks like a new emitter |
+| False-alarm rejection time / real tracks dropped | time until a false track's existence odds fall below threshold; real tracks wrongly marked dead |
+| Threat-weighted / high-threat interception, high-threat TTFI | interception weighted 0.3 / 1 / 3 by threat level; high-threat subset only |
+| Threat class accuracy | share of tracks whose online predicted threat level matches the label |
 
 Reported as mean ± 95 % bootstrap CI over **10 seeds**.
+
+**Robustness result** (1,008 runs, all 36 scenarios pooled):
+
+| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+|---|---|---|---|---|---|---|
+| nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
+| P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
+| P_d = 0.7 | 8.2 % | 13.9 % | **55.5 %** [51.7, 59.2] | 77.4 % | 0.72 | 56.9 % |
+| P_d = 0.5 | 6.3 % | 12.4 % | **44.4 %** [40.3, 48.8] | 66.5 % | 0.67 | 48.2 % |
+| P_fa = 0.001 per look (~5 false alarms / run) | 10.3 % | 15.6 % | **68.1 %** [65.0, 71.0] | 91.6 % | 0.74 | 69.7 % |
+| P_fa = 0.005 (~23 / run) | 10.3 % | 16.6 % | **66.8 %** [62.7, 70.8] | 91.6 % | 0.73 | 70.3 % |
+| P_fa = 0.02 (~70 / run, stress) | 10.3 % | 16.4 % | **58.4 %** [54.0, 62.9] | 91.6 % | 0.64 | 66.8 % |
 
 ### 7. Turing replay (`primes/data/turing.py`)
 

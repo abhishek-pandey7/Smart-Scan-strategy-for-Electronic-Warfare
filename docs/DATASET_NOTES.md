@@ -94,6 +94,18 @@ The metadata names each emitter's radar type (`function`): **68 types**, e.g. AN
 - Identifying a *known* type from observed parameters is a library lookup, exactly as in operational ESM emitter libraries. A gradient-boosted classifier on observable features (frequency, PRI set, PW set, scan period, flash width, with measurement noise and partial observation) reaches **100 %** on the validation split. That number is expected, not impressive.
 - The meaningful test is **leave-one-radar-type-out**: predict the threat level of a type the model has never seen from its parameters alone. Result: **63 % three-way accuracy vs 48.5 % chance**, recall 0.65 / 0.62 / 0.64 for low / medium / high, and the *priority weight* it assigns is correctly ordered on average (low 1.04, medium 1.54, high 2.26 on a 0.3 / 1 / 3 scale). So for unseen radars the model is a directionally correct prior, not an identifier. Hardest cases are naval/ground surveillance radars that share parameter ranges with fire-control sets.
 
+**In the scheduler.** Online, from the partial and noisy parameters it has actually measured, PRIMES assigns the correct threat level to 53 % of tracks on real scenarios, and 86 % on simulated `dense`, whose emitters are sampled from the same population. Using the expected weight as a priority on the three real tuning scenarios lifts high-threat interception from 69.7 % to 77.6 % and cuts time to first high-threat catch from 9.8 s to 7.7 s. It stays a variant (`primes_threat`), not the default, because it costs overall interception on crowded simulated scenarios.
+
+## Robustness on real scenarios (11 benchmark configs)
+
+PRIMES interception on the 11 real stare-mode scenarios:
+
+- **Nominal:** 69.8 %.
+- **P_d = 0.9 / 0.7 / 0.5:** 62.1 / 56.9 / 48.2 %, against an oracle at 82.9 / 78.3 / 71.1 % (84.8 % nominal).
+- **P_fa = 0.001 / 0.005 / 0.02 per look:** 69.7 / 70.3 / 66.8 %.
+
+Real scenarios tolerate false alarms better than the pooled set: −3 vs −11 points at the stress rate. Their many visible emitters give real tracks repeated hits that false tracks never get. Full table: `docs/PRIMES_FULL_ARCHITECTURE.md` §3.1; data in `artifacts/robustness.json`.
+
 ## Design implications for PRIMES
 
 1. **Two visibility regimes.** Flash-like emitters (12 %) reward learning period and phase and placing *short, well-timed* dwells. The majority are intermittently visible for seconds at a time; for those the question is "is it on right now?", answered by an on/off Markov belief that decays between looks.
