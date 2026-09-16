@@ -54,7 +54,7 @@ class HitRateBandit(Policy):
     def update(self, look: Look) -> None:
         c = look.action.centre
         self.looks[c] += 1
-        self.hits[c] += any(e >= 0 for e in look.detections)
+        self.hits[c] += bool(look.detections)
 
 
 class Oracle(Policy):

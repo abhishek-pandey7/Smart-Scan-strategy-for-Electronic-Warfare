@@ -30,7 +30,7 @@ def scenario_payload(truth: Truth) -> dict:
         "horizon_s": truth.horizon_s,
         "centres_mhz": CENTRES_MHZ.tolist(),
         "emitters": [{"id": e.id, "kind": e.kind, "label": e.label, "role": e.role,
-                      "freqs_mhz": [round(f, 1) for f in e.freqs_mhz[:6]], "period_s": _r(e.period_s),
+                      "freqs_mhz": [round(f, 1) for f in e.freqs_mhz[:6]], "period_s": _r(e.period_s), "threat": e.threat,
                       "flash_ms": _r(e.flash_s * 1e3 if e.flash_s else None, 2), "appear_s": _r(e.appear_s)}
                      for e in truth.emitters],
         "flashes": {"columns": ["emitter", "index", "start", "end", "freq_mhz"],
@@ -75,6 +75,7 @@ def trace_payload(trace: Trace, truth: Truth) -> dict:
         "intercepts": [[_r(t), e, k] for t, e, k in events],
         "timeline": timeline,
         "tracks": [[_r(t), e, _r(T), _r(c, 3)] for t, e, T, c in trace.logs.tracks],
+        "threats": [[_r(t), e, p] for t, e, p in trace.logs.threats],
         "predictions": predictions,
         "explanations": [ex for _, ex in trace.explanations[::step]],
     }

@@ -65,11 +65,18 @@ export function TrackTable({ run, emitters, cursor }: { run: PolicyRun; emitters
     latest.set(e, { t, period, conf, hits: (prev?.hits ?? 0) + 1 });
   }
   const rows = [...latest.entries()].sort((a, b) => b[1].t - a[1].t).slice(0, 10);
+  const LEVELS = ["low", "medium", "high"];
+  const threatOf = new Map<number, string>();
+  for (const [t, e, probs] of run.threats ?? []) {
+    if (t > cursor) break;
+    threatOf.set(e, LEVELS[probs.indexOf(Math.max(...probs))]);
+  }
+  const showThreat = threatOf.size > 0;
   if (!rows.length) return <p className="muted">No emitters tracked yet.</p>;
   return (
     <table className="data">
       <thead>
-        <tr><th>Emitter</th><th>Flashes caught</th><th>Estimated period</th><th>True period</th><th>Confidence</th></tr>
+        <tr><th>Emitter</th><th>Flashes caught</th><th>Estimated period</th><th>True period</th><th>Confidence</th>{showThreat && <th>Threat (predicted / true)</th>}</tr>
       </thead>
       <tbody>
         {rows.map(([e, r]) => {
@@ -83,6 +90,12 @@ export function TrackTable({ run, emitters, cursor }: { run: PolicyRun; emitters
               <td>{r.hits < 2 ? <span className="muted">learning (1 flash)</span> : est !== null ? `${est.toFixed(3)} s` : "intermittent"}{ok && r.hits >= 2 ? " ✓" : ""}</td>
               <td>{tp !== null ? `${tp.toFixed(3)} s` : "–"}</td>
               <td>{r.conf !== null ? r.conf.toFixed(2) : "–"}</td>
+              {showThreat && (
+                <td>
+                  <span className={`threat threat-${threatOf.get(e) ?? "none"}`}>{threatOf.get(e) ?? "–"}</span>
+                  <span className="muted"> / {truth.get(e)?.threat || "–"}</span>
+                </td>
+              )}
             </tr>
           );
         })}
