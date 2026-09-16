@@ -1,6 +1,6 @@
 # PRIMES — Progress
 
-_Last updated: 2026-09-16 (micro dwell controller default; 610-run benchmark)_
+_Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 1,008-run robustness sweep)_
 
 ## Status at a glance
 
@@ -16,6 +16,8 @@ _Last updated: 2026-09-16 (micro dwell controller default; 610-run benchmark)_
 | Multi-seed benchmark with confidence intervals | ✅ done: 610 runs incl. ablations, `artifacts/benchmark.json` |
 | Solution document (ideation, technical approach, feasibility, impact, references) | ✅ `docs/PRIMES_FULL_ARCHITECTURE.md` |
 | Frontend head-to-head banner (live "N× more" factor) | ✅ done |
+| Threat-aware scheduling (taxonomy, classifier, metrics, variant) | ✅ measured; variant `primes_threat`, off by default |
+| Robustness sweep (P_d, P_fa) | ✅ 1,008 runs, `artifacts/robustness.json` |
 
 ## Where things are
 
@@ -136,12 +138,34 @@ Other metrics:
 
 **Where PRIMES does not win:** on `dense` raster discovers slightly *more* emitters (76 % vs 70 %) at about the same time-to-first-intercept; PRIMES trades a little breadth of search for 6.7× the flashes intercepted there. On real data discovery is now equal (93 % vs 93 %). `w_new` moves along this trade-off.
 
+## Threat-aware scheduling
+
+- **Labels and classifier:** 68 radar types mapped to low / medium / high (`primes/assets/threat_taxonomy.json`); the classifier works on observable parameters (`primes/threat/`).
+- **Classifier accuracy:** 100 % on known types, because each type has one parameter template, so this is a library lookup. On unseen types (leave-one-type-out) it scores **63 % vs 48.5 % chance**.
+- **Real tuning scenarios:** high-threat interception **69.7 % → 77.6 %**; first catch of a high-threat radar **9.8 → 7.7 s**; overall interception 73.0 → 75.1 %.
+- **Simulated tuning scenarios:** overall interception mixed 79.4 → 69.0 %, lockout 75.6 → 67.5 %, easy 61.6 → 65.7 %. Because of this it is a mission profile, not the default.
+
+## Robustness (1,008 runs: 7 conditions × raster / greedy / PRIMES / oracle × 25 simulated + 11 real scenarios)
+
+| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+|---|---|---|---|---|---|---|
+| nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
+| P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
+| P_d = 0.7 | 8.2 % | 13.9 % | **55.5 %** [51.7, 59.2] | 77.4 % | 0.72 | 56.9 % |
+| P_d = 0.5 | 6.3 % | 12.4 % | **44.4 %** [40.3, 48.8] | 66.5 % | 0.67 | 48.2 % |
+| P_fa = 0.001 per look (~5 false alarms / run) | 10.3 % | 15.6 % | **68.1 %** [65.0, 71.0] | 91.6 % | 0.74 | 69.7 % |
+| P_fa = 0.005 (~23 / run) | 10.3 % | 16.6 % | **66.8 %** [62.7, 70.8] | 91.6 % | 0.73 | 70.3 % |
+| P_fa = 0.02 (~70 / run, stress) | 10.3 % | 16.4 % | **58.4 %** [54.0, 62.9] | 91.6 % | 0.64 | 66.8 % |
+
+- False alarms are now modelled as new emitters (unique id, plausible pulse train, random in-band frequency), not as ignorable noise.
+- Track existence odds (`use_existence`) reject false tracks but discount real emitters caught only once (easy, seed 0: 85.6 % → 66.1 %), so they are off by default.
+
 ## Known issues and caveats
 
 1. **DQN is a modest rival.** It matches the greedy bandit but not more; a stronger model-free baseline (longer training, recurrent policy) would make the comparison harder to dismiss. What exists is fair: same reward, same environment, best-on-validation checkpoint, held-out seeds.
 2. **Discovery breadth on `dense`** is below raster (70 % vs 76 %); on real data it is now equal. Tunable via `w_new`.
 3. **Information gain adds nothing**, and removing it looks slightly better; decide on tuning scenarios, then either drop it or keep it as an ablated component. Do not claim it as a source of gain.
-4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Real deinterleaving is roadmap.
+4. **Ideal association:** pulses arrive already labelled by emitter (truth labels). Next item: realistic association from noisy PDWs.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
 6. **Runtime:** PRIMES takes tens of seconds to a few minutes per 30 s Turing scenario in Python (the micro controller makes more, shorter decisions). Fine for replay and demo (results are cached); not real-time yet: a porting task.
 7. **Simulator realism:** simulated flash emitters are idealised compared with Turing visibility. The `mixed` family and the Turing replays cover the gap.
