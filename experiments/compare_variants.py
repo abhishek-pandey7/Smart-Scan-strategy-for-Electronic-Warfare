@@ -30,6 +30,8 @@ VARIANTS = {
     "base_rt_cal": {"retune_s": 0.0005, "retune_in_index": False, "calibrate_dwells": True},
     "short5_rt_cal": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
                       "retune_in_index": False, "calibrate_dwells": True},
+    "micro": {"micro_dwell": True},
+    "micro_short5": {"micro_dwell": True, "dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100)},
     "short5_search_rt": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
                          "retune_in_index": False, "min_track_dwell_s": 0.010},
 }

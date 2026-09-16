@@ -7,7 +7,12 @@ from __future__ import annotations
 
 import numpy as np
 
-from primes.core.types import CENTRES_MHZ, DWELL_OPTIONS_S, N_CENTRES, Action, Look
+from primes.core.types import CENTRES_MHZ, N_CENTRES, Action, Look
+
+# 5 ms looks make search much faster; the micro dwell controller keeps them honest by extending a
+# look that heard only part of a flash and by never using one on an emitter whose pulses are too
+# sparse to confirm in that time.
+PRIMES_DWELLS_S = (0.005, 0.010, 0.025, 0.050, 0.100)
 from primes.data.priors import Priors
 from primes.policies.base import Context, Policy
 from primes.predict.search import UndiscoveredBelief
@@ -22,9 +27,13 @@ class PrimesLite(Policy):
     def __init__(self, lam: float = 0.3, w_new: float = 2.0, stale_s: float = 2.0, retune_s: float = 0.0,
                  search_threshold: float = 0.15, dither: float = 0.10, priors: Priors | None = None,
                  use_info_gain: bool = True, use_dither: bool = True, use_freq_prior: bool = False,
-                 stale_intermittent_s: float | None = None, dwells_s=DWELL_OPTIONS_S,
+                 stale_intermittent_s: float | None = None, dwells_s=PRIMES_DWELLS_S,
                  retune_in_index: bool = True, min_track_dwell_s: float = 0.0, calibrate_dwells: bool = False,
+                 micro_dwell: bool = True, extend_s: float = 0.005, max_extensions: int = 3,
                  name: str | None = None):
+        # Micro dwell controller: search looks end as soon as an emitter is confirmed, and a look that
+        # heard 1-2 pulses near its end is extended on the same centre instead of hopping away.
+        self.micro_dwell, self.extend_s, self.max_extensions = micro_dwell, extend_s, max_extensions
         # Online calibration per dwell length: observed detections of known emitters / predicted ones.
         # Learns, e.g., that very short looks under-deliver on bursty real emitters.
         self.calibrate_dwells = calibrate_dwells
@@ -59,6 +68,8 @@ class PrimesLite(Policy):
         self.cal_pred = np.zeros(len(self.dwells))
         self.cal_hits = np.zeros(len(self.dwells))
         self._pred_look = 0.0
+        self._extend_centre: int | None = None
+        self._extensions = 0
         self.step = 0
         self.centre_phase = ctx.rng.random(N_CENTRES)
         self._last = {}
@@ -66,6 +77,13 @@ class PrimesLite(Policy):
     # ------------------------------------------------------------------ decision
     def act(self, t: float) -> Action:
         self.search.advance(t)
+        if self.micro_dwell and self._extend_centre is not None:
+            c = self._extend_centre
+            self._pred_look = 0.0
+            self._last = {"t": round(t, 4), "centre_mhz": float(CENTRES_MHZ[c]), "dwell_ms": self.extend_s * 1e3,
+                          "mode": "extend", "index": 0.0, "terms": {"exploit": 0.0, "discovery": 0.0, "info_gain": 0.0},
+                          "tracks": len(self.tracks), "kappa": round(self.search.kappa, 2)}
+            return Action(c, self.extend_s, extend=True, stop_on_detect=True)
         n_d = len(self.dwells)
         exploit = np.zeros((N_CENTRES, n_d))
         info = np.zeros((N_CENTRES, n_d))
@@ -128,7 +146,7 @@ class PrimesLite(Policy):
                                    "period_s": None if not np.isfinite(T) else round(T, 4),
                                    "confidence": round(conf, 3),
                                    "next_flash_in_ms": None if nxt is None else round((nxt - t) * 1e3, 1)}
-        return Action(int(c), float(self.dwells[j]))
+        return Action(int(c), float(self.dwells[j]), stop_on_detect=self.micro_dwell and search_mode)
 
     # ------------------------------------------------------------------ learning from hits and misses
     def update(self, look: Look) -> None:
@@ -170,6 +188,14 @@ class PrimesLite(Policy):
                 tr.miss(look.t, a.dwell_s, a.centre, p_d=p_d)
 
         self.prev_centre = a.centre
+        if self.micro_dwell:
+            end = look.t + a.dwell_s
+            near_end = [e for e, last in look.partial.items()
+                        if e >= 0 and e not in detected and end - last <= 0.003]
+            if near_end and self._extensions < self.max_extensions:
+                self._extend_centre, self._extensions = a.centre, self._extensions + 1
+            else:
+                self._extend_centre, self._extensions = None, 0
 
     def dwell_calibration(self, pseudo: float = 3.0) -> np.ndarray:
         return np.clip((self.cal_hits + pseudo) / (self.cal_pred + pseudo), 0.2, 1.2)

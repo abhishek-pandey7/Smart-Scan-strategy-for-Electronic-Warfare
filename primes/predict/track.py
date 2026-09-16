@@ -123,6 +123,11 @@ class Track:
     def min_overlap(self) -> float:
         return (N_MIN_PULSES - 1) * self.pri
 
+    @property
+    def reliable_dwell(self) -> float:
+        """Shortest dwell that reliably contains N_MIN_PULSES of this emitter's pulse train."""
+        return N_MIN_PULSES * self.pri * 1.5 + 1e-4
+
     def best(self) -> tuple[float, float, float]:
         """(period, phase, posterior weight) of the MAP hypothesis; period is inf if continuous wins."""
         pm = self.p_markov
@@ -329,7 +334,7 @@ class Track:
             if p.max() > 0:
                 self.logw = self.logw + np.log(np.maximum(1.0 - p, MISS_FLOOR))
                 self._prune()
-        if self.markov is not None and d >= self.min_overlap * 1.2 + 1e-4:
+        if self.markov is not None and d >= self.reliable_dwell:
             p_markov_miss = self.markov.observe(t, False, p_d * cover)
             self.log_odds_markov += np.log(max(p_markov_miss, MISS_FLOOR)) - np.log(max(1.0 - p_mix, MISS_FLOOR))
 
@@ -346,8 +351,9 @@ class Track:
         rows, wts = [self._flash_prob(t, dwells) * P_D_MODEL], [_softmax(self.logw) * (1 - pm)]
         n_per = len(self.T)
         if self.markov is not None:
-            # a dwell can only confirm an on emitter if it is long enough to hold N_MIN_PULSES of it
-            feasible = (dwells >= self.min_overlap * 1.2 + 1e-4).astype(float)
+            # a dwell only confirms an on emitter if it comfortably holds N_MIN_PULSES of its pulse
+            # train; at the bare minimum overlap the pulses land inside only about half the time
+            feasible = (dwells >= self.reliable_dwell).astype(float)
             rows.append(P_D_MODEL * self.markov.belief_matrix(t + dwells / 2) * feasible[None, :])
             wts.append(self.markov.weights * pm)
         P, w = np.vstack(rows), np.concatenate(wts)
