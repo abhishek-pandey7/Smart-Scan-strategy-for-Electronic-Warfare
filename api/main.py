@@ -22,7 +22,7 @@ from primes.eval.serialize import scenario_payload, trace_payload
 ROOT = Path(__file__).resolve().parents[1]
 RUN_CACHE = ROOT / "artifacts" / "runs"
 BENCHMARK = ROOT / "artifacts" / "benchmark.json"
-CACHE_VERSION = "v1"
+CACHE_VERSION = "v2"  # bump whenever scheduler behaviour changes
 
 app = FastAPI(title="PRIMES API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
