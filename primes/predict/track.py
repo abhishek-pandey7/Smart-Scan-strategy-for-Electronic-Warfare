@@ -69,6 +69,10 @@ class Track:
         self.markov: MarkovBank | None = None
         self.log_odds_markov = 0.0                      # neutral prior between the two classes
         self.hit_looks: set[int] = set()
+        # observables for threat estimation (bounded buffers)
+        self.pri_obs: list[float] = []        # µs, pulse-to-pulse intervals within detections
+        self.pw_obs: list[float] = []         # µs
+        self.threat_probs: np.ndarray | None = None
         self._next_relevant = -np.inf
         self._set_bank(*(np.empty(0),) * 7)
 
@@ -97,6 +101,19 @@ class Track:
         cand = np.where(nxt > after, nxt - self._uncertainty(k + 1), np.inf)
         self._next_relevant = float(cand.min()) - self.width
         return t + horizon >= self._next_relevant
+
+    def update_threat(self) -> None:
+        """Re-estimate threat class probabilities from this track's own observations."""
+        from primes.threat.model import predict
+        T, _, _ = self.best()
+        periodic = np.isfinite(T)
+        self.threat_probs = predict(self.flash_freqs, self.pri_obs, self.pw_obs,
+                                    T if periodic else None, self.width if periodic else None)
+
+    @property
+    def threat_weight(self) -> float:
+        from primes.threat.model import expected_weight
+        return expected_weight(self.threat_probs)
 
     @property
     def p_markov(self) -> float:
@@ -265,7 +282,7 @@ class Track:
 
     # ------------------------------------------------------------------ evidence
     def hit(self, look_t: float, dwell: float, pulses: np.ndarray, freqs: np.ndarray, looks,
-            look_index: int = -1) -> bool:
+            look_index: int = -1, pws: np.ndarray | None = None) -> bool:
         """Incorporate a detection. `looks` = (t, d, centre) arrays of all past looks.
         Returns True if it started a new flash anchor."""
         self.hit_looks.add(look_index)
@@ -290,6 +307,10 @@ class Track:
             anchor, sigma = float(pulses[0]) - max(w - span, 0.0) / 2, max((w - span) / 2, 1e-3)
 
         self.flash_freqs.append(float(np.median(freqs)))
+        diffs = np.diff(np.sort(pulses)) * 1e6
+        self.pri_obs = (self.pri_obs + diffs[(diffs > 0) & (diffs < 50_000)].tolist())[-400:]
+        if pws is not None and len(pws):
+            self.pw_obs = (self.pw_obs + np.asarray(pws, float).tolist())[-400:]
         fr = np.array(self.flash_freqs[-8:])
         c = int(np.argmin(np.abs(CENTRES_MHZ - fr[-1])))
         cover_at_hit = 1.0 if not self.anchors else max(self.cover[c], 0.25)

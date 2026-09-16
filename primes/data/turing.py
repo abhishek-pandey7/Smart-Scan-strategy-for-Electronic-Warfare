@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 
 from primes.core.types import EmitterInfo, Truth
+from primes.threat.taxonomy import threat_level
 
 REPO_ID = "alan-turing-institute/turing-synthetic-radar-dataset"
 RAW_DIR = Path(__file__).resolve().parents[2] / "data" / "raw"
@@ -45,7 +46,8 @@ def load_stare(config: int, split: str = "val_stare") -> Truth:
                 id=int(name.split("_")[1]), kind="circular" if circular else "omni",
                 freqs_mhz=[float(x) for x in tx["frequency_config"]["freqs_mhz"][()]],
                 period_s=period, flash_s=period * bw / 360.0 if circular else None,
-                label=str(tx.attrs.get("function", ""))))
+                label=str(tx.attrs.get("function", "")),
+                threat=threat_level(str(tx.attrs.get("function", "")))))
 
     toa = data[:, 0].astype(np.float64) * 1e-6
     keep = (toa >= 0) & (toa < COLLECTION_S)
@@ -53,4 +55,5 @@ def load_stare(config: int, split: str = "val_stare") -> Truth:
     present = set(np.unique(labels[keep]).tolist())
     return Truth(name=f"turing:val_stare/config_{config}", horizon_s=COLLECTION_S,
                  toa=toa[keep][order], freq=data[keep, 1][order].astype(np.float32),
-                 emitter=labels[keep][order], emitters=[e for e in infos if e.id in present])
+                 emitter=labels[keep][order], emitters=[e for e in infos if e.id in present],
+                 pw=data[keep, 2][order].astype(np.float32))

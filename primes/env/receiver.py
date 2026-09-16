@@ -39,18 +39,22 @@ class Receiver:
         toas = tr.toa[lo:hi][inband]
         freqs = tr.freq[lo:hi][inband]
         ids = tr.emitter[lo:hi][inband]
+        widths = tr.pw[lo:hi][inband] if tr.pw is not None else None
 
         detections: dict[int, np.ndarray] = {}
         measured: dict[int, np.ndarray] = {}
+        measured_pw: dict[int, np.ndarray] = {}
         partial: dict[int, float] = {}
         for e in np.unique(ids):
             sel = ids == e
             if sel.sum() >= self.n_min and self.rng.random() < self.p_d:
                 detections[int(e)], measured[int(e)] = toas[sel], freqs[sel]
+                if widths is not None:
+                    measured_pw[int(e)] = widths[sel]
             elif 0 < sel.sum() < self.n_min:
                 partial[int(e)] = float(toas[sel][-1])
         if self.p_fa > 0 and self.rng.random() < self.p_fa:
             detections[-1] = np.sort(t + self.rng.random(self.n_min) * action.dwell_s)
             measured[-1] = np.full(self.n_min, CENTRES_MHZ[action.centre], dtype=np.float32)
         return Look(t=ws, action=Action(action.centre, t + action.dwell_s - ws, action.extend, action.stop_on_detect),
-                    detections=detections, freqs=measured, partial=partial)
+                    detections=detections, freqs=measured, partial=partial, pws=measured_pw)

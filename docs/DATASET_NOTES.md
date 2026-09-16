@@ -85,6 +85,15 @@ Fitted by streaming per-transmitter metadata over the HF API (`primes/data/fit_p
 - Within the 0.5–30 s range that matters for a 30–60 s engagement, 19 discrete periods carry 96.3 % of the mass. After a **single** catch, PRIMES therefore only has to test ~19 candidate return times, and one more hit or a few misses usually settle it.
 - Omni fraction 3.6 %; frequency-mode and PRI distributions match the validation split above.
 
+## Radar types and threat labels
+
+The metadata names each emitter's radar type (`function`): **68 types**, e.g. AN/APG-81 F-35 Fire Control, Patriot AN/MPQ-53, NEXRAD weather radar, Furuno marine navigation radar. We assigned each type an analyst threat level in `primes/assets/threat_taxonomy.json`: **high** (22 types: fire control, engagement and multifunction air/missile defence), **medium** (33: surveillance, early warning, patrol, weapon locating), **low** (13: civil, weather, navigation, scientific). Used only as ground truth for training and scoring, never by the scheduler.
+
+**Each type has one fixed parameter template.** Across 128,252 training emitters the median type has exactly 1 distinct frequency set, 1 PRI set, 1 pulse-width set and 1 scan rate (a few types vary one parameter, e.g. AN/FPS-132 uses 31 frequency sets). Consequences:
+
+- Identifying a *known* type from observed parameters is a library lookup, exactly as in operational ESM emitter libraries. A gradient-boosted classifier on observable features (frequency, PRI set, PW set, scan period, flash width, with measurement noise and partial observation) reaches **100 %** on the validation split. That number is expected, not impressive.
+- The meaningful test is **leave-one-radar-type-out**: predict the threat level of a type the model has never seen from its parameters alone. Result: **63 % three-way accuracy vs 48.5 % chance**, recall 0.65 / 0.62 / 0.64 for low / medium / high, and the *priority weight* it assigns is correctly ordered on average (low 1.04, medium 1.54, high 2.26 on a 0.3 / 1 / 3 scale). So for unseen radars the model is a directionally correct prior, not an identifier. Hardest cases are naval/ground surveillance radars that share parameter ranges with fire-control sets.
+
 ## Design implications for PRIMES
 
 1. **Two visibility regimes.** Flash-like emitters (12 %) reward learning period and phase and placing *short, well-timed* dwells. The majority are intermittently visible for seconds at a time; for those the question is "is it on right now?", answered by an on/off Markov belief that decays between looks.
