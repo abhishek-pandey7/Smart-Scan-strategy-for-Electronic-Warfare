@@ -3,7 +3,7 @@ export type Catalog = { scenarios: CatalogItem[]; policies: CatalogItem[] };
 
 export type Emitter = {
   id: number; kind: string; label: string; role: string; freqs_mhz: number[];
-  period_s: number | null; flash_ms: number | null; appear_s: number;
+  period_s: number | null; flash_ms: number | null; appear_s: number; threat?: string;
 };
 
 export type Scenario = {
@@ -26,6 +26,7 @@ export type PolicyRun = {
   intercepts: [number, number, number][];
   timeline: { t: number[]; intercepted: number[]; discovered: number[] };
   tracks: [number, number, number | null, number | null][];
+  threats?: [number, number, number[]][];
   predictions: { t: number; emitter: number; predicted: number; actual: number | null }[];
   explanations: Explanation[];
 };

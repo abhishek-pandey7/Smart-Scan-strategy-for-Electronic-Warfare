@@ -13,6 +13,7 @@ class Receiver:
                  p_fa: float = 0.0, n_min: int = N_MIN_PULSES):
         self.truth, self.rng = truth, rng
         self.p_d, self.p_fa, self.n_min = p_d, p_fa, n_min
+        self._false_alarms = 0
 
     def observe(self, t: float, action: Action, window_start: float | None = None) -> Look:
         """Listen on `action.centre` from `t` for `action.dwell_s`.
@@ -54,7 +55,12 @@ class Receiver:
             elif 0 < sel.sum() < self.n_min:
                 partial[int(e)] = float(toas[sel][-1])
         if self.p_fa > 0 and self.rng.random() < self.p_fa:
-            detections[-1] = np.sort(t + self.rng.random(self.n_min) * action.dwell_s)
-            measured[-1] = np.full(self.n_min, CENTRES_MHZ[action.centre], dtype=np.float32)
+            # A false alarm is indistinguishable from a new emitter to the scheduler: it gets a fresh
+            # negative id (never matching truth), a random in-band frequency and a plausible pulse train.
+            self._false_alarms += 1
+            fid = -1 - self._false_alarms
+            pri = float(self.rng.uniform(2e-4, 2e-3))
+            detections[fid] = t + self.rng.random() * max(action.dwell_s - self.n_min * pri, 0.0) + np.arange(self.n_min) * pri
+            measured[fid] = np.full(self.n_min, CENTRES_MHZ[action.centre] + self.rng.uniform(-450, 450), dtype=np.float32)
         return Look(t=ws, action=Action(action.centre, t + action.dwell_s - ws, action.extend, action.stop_on_detect),
                     detections=detections, freqs=measured, partial=partial, pws=measured_pw)

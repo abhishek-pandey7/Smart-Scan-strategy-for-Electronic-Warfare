@@ -22,6 +22,8 @@ POLICY_INFO = {
     "primes_no_ig": "PRIMES-lite ablation: no information-gain term",
     "primes_fprior": "PRIMES-lite variant: search seeded with the learned frequency distribution",
     "primes_no_micro": "PRIMES-lite ablation: no micro dwell controller (no 5 ms search looks)",
+    "primes_threat": "PRIMES-lite variant: emitter priority scaled by predicted threat level",
+    "primes_exist": "PRIMES-lite variant: tracks weighted by estimated existence probability (false-alarm rejection)",
     "oracle": "Clairvoyant reference: sees the truth (upper bound)",
 }
 
@@ -63,6 +65,10 @@ def make_policy(name: str) -> Policy:
         return PrimesLite(use_info_gain=False, name="primes_no_ig")
     if name == "primes_fprior":
         return PrimesLite(use_freq_prior=True, name="primes_fprior")
+    if name == "primes_exist":
+        return PrimesLite(use_existence=True, name="primes_exist")
+    if name == "primes_threat":
+        return PrimesLite(use_threat=True, name="primes_threat")
     if name == "primes_no_micro":
         from primes.core.types import DWELL_OPTIONS_S
         return PrimesLite(micro_dwell=False, dwells_s=DWELL_OPTIONS_S, name="primes_no_micro")

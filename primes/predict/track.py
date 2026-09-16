@@ -30,6 +30,9 @@ MAX_FUTURE_FLASHES = 30.0
 CONFIDENT = 0.6             # posterior weight above which a track's next flash is treated as an appointment
 MIN_UNCERTAINTY_S = 0.0005
 PRE_DETECTION_S = 10.0       # misses this long before a first detection still count as evidence
+P_FA_ASSUMED = 0.01          # per-look false-alarm rate assumed when weighing whether a track is real
+EXIST_PRIOR_LOGODDS = 1.4    # a single unconfirmed detection is real with probability ~0.8; a 2nd catch confirms
+DEAD_BELOW = 0.1             # tracks below this existence probability are dropped from scheduling (revived by a hit)
 REL_BIN = (PERIOD_RANGE_S[1] / PERIOD_RANGE_S[0]) ** (1 / N_GRID) - 1
 
 
@@ -73,6 +76,10 @@ class Track:
         self.pri_obs: list[float] = []        # µs, pulse-to-pulse intervals within detections
         self.pw_obs: list[float] = []         # µs
         self.threat_probs: np.ndarray | None = None
+        # Existence: log-odds that this track is a real emitter rather than a false alarm. Every
+        # unexplained miss lowers it (a phantom never re-appears); every catch raises it.
+        self.log_odds_exist = EXIST_PRIOR_LOGODDS
+        self.first_hit = np.inf
         self._next_relevant = -np.inf
         self._set_bank(*(np.empty(0),) * 7)
 
@@ -114,6 +121,14 @@ class Track:
     def threat_weight(self) -> float:
         from primes.threat.model import expected_weight
         return expected_weight(self.threat_probs)
+
+    @property
+    def p_exist(self) -> float:
+        return float(1.0 / (1.0 + np.exp(-np.clip(self.log_odds_exist, -30.0, 30.0))))
+
+    @property
+    def dead(self) -> bool:
+        return self.p_exist < DEAD_BELOW
 
     @property
     def p_markov(self) -> float:
@@ -286,6 +301,11 @@ class Track:
         """Incorporate a detection. `looks` = (t, d, centre) arrays of all past looks.
         Returns True if it started a new flash anchor."""
         self.hit_looks.add(look_index)
+        if self.n_hits > 0:
+            # a repeat detection is strong evidence of a real emitter over a phantom
+            self.log_odds_exist = min(self.log_odds_exist + np.log(0.5 / P_FA_ASSUMED), 30.0)
+        else:
+            self.first_hit = look_t
         pri = float(np.median(np.diff(pulses))) if len(pulses) > 1 else self.pri
         self.pri = pri if self.n_hits == 0 else 0.8 * self.pri + 0.2 * pri
         edge = 1.5 * pri + 1e-4
@@ -355,9 +375,14 @@ class Track:
             if p.max() > 0:
                 self.logw = self.logw + np.log(np.maximum(1.0 - p, MISS_FLOOR))
                 self._prune()
+        p_markov_miss = None
         if self.markov is not None and d >= self.reliable_dwell:
             p_markov_miss = self.markov.observe(t, False, p_d * cover)
             self.log_odds_markov += np.log(max(p_markov_miss, MISS_FLOOR)) - np.log(max(1.0 - p_mix, MISS_FLOOR))
+        # existence evidence: P(miss | real) vs P(miss | phantom) = 1
+        pm = self.p_markov
+        p_miss_real = (1.0 - pm) * (1.0 - p_mix) + pm * (p_markov_miss if p_markov_miss is not None else 1.0)
+        self.log_odds_exist += np.log(max(p_miss_real, 1e-3))
 
     # ------------------------------------------------------------------ prediction
     def action_terms(self, t: float, dwells: np.ndarray, horizon: float | None = None
