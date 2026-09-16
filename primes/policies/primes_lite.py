@@ -30,7 +30,8 @@ class PrimesLite(Policy):
                  stale_intermittent_s: float | None = None, dwells_s=PRIMES_DWELLS_S,
                  retune_in_index: bool = True, min_track_dwell_s: float = 0.0, calibrate_dwells: bool = False,
                  micro_dwell: bool = True, extend_s: float = 0.005, max_extensions: int = 3,
-                 use_threat: bool = False,
+                 use_threat: bool = False, threat_strength: float = 1.0, threat_confidence: float = 0.0,
+                 use_existence: bool = False,
                  name: str | None = None):
         # Micro dwell controller: search looks end as soon as an emitter is confirmed, and a look that
         # heard 1-2 pulses near its end is extended on the same centre instead of hopping away.
@@ -38,6 +39,13 @@ class PrimesLite(Policy):
         # Threat-aware priority: each emitter's value is scaled by the weight of its predicted threat class
         # (learned classifier on the track's own observed PRI / PW / frequency / scan parameters).
         self.use_threat = use_threat
+        # strength 1 applies the full 0.3x-3x weight range; 0.5 halves the deviation from 1.
+        # confidence: apply weighting only when the classifier's top class probability exceeds it.
+        self.threat_strength, self.threat_confidence = threat_strength, threat_confidence
+        # Existence-weighted scheduling (drop tracks that look like false alarms). Measured: rejects
+        # phantoms in 15-40 s but penalises genuine single-detection emitters (easy 86% -> 66% with no
+        # false alarms at all), so it is off; existence odds are still estimated and logged.
+        self.use_existence = use_existence
         # Online calibration per dwell length: observed detections of known emitters / predicted ones.
         # Learns, e.g., that very short looks under-deliver on bursty real emitters.
         self.calibrate_dwells = calibrate_dwells
@@ -96,6 +104,8 @@ class PrimesLite(Policy):
         horizon = float(self.dwells[-1])
         next_appt, appt_cover = np.inf, None
         for tr in self.tracks.values():
+            if self.use_existence and tr.dead:
+                continue
             appt = tr.appointment(t)
             if appt is not None and appt < next_appt:
                 next_appt, appt_cover = appt, tr.cover
@@ -103,9 +113,11 @@ class PrimesLite(Policy):
                 continue
             p, v, ig = tr.action_terms(t, self.dwells, self.ctx.horizon_s)
             stale = self.stale_s if tr.model == "periodic" else self.stale_intermittent_s
-            g = min(1.0, (t - tr.last_hit) / stale)
+            g = min(1.0, (t - tr.last_hit) / stale) * (tr.p_exist if self.use_existence else 1.0)
             if self.use_threat:
-                g *= tr.threat_weight
+                probs = tr.threat_probs
+                if probs is not None and float(np.max(probs)) >= self.threat_confidence:
+                    g *= 1.0 + self.threat_strength * (tr.threat_weight - 1.0)
             exploit += np.outer(tr.cover, g * v)
             info += np.outer(tr.cover, ig)
             expected += np.outer(tr.cover, p)
@@ -157,7 +169,7 @@ class PrimesLite(Policy):
     # ------------------------------------------------------------------ learning from hits and misses
     def update(self, look: Look) -> None:
         a = look.action
-        detected = frozenset(e for e in look.detections if e >= 0)
+        detected = frozenset(look.detections)        # false alarms carry unique negative ids and are tracked like any emitter
         new_freqs = [float(np.median(look.freqs[e])) if e in look.freqs else float(CENTRES_MHZ[a.centre])
                      for e in detected if e not in self.tracks]
         self.search.observe(a.centre, a.dwell_s, new_freqs)
@@ -195,8 +207,11 @@ class PrimesLite(Policy):
         self.cal_hits[j] += known_hits
         p_d = min(0.99, P_D_MODEL * self.dwell_calibration()[j]) if self.calibrate_dwells else P_D_MODEL
         for e, tr in self.tracks.items():
-            if e not in detected:
+            if e not in detected and not (self.use_existence and tr.dead):
+                was_dead = tr.dead
                 tr.miss(look.t, a.dwell_s, a.centre, p_d=p_d)
+                if tr.dead and not was_dead:
+                    self.logs.rejections.append((look.t + a.dwell_s, e, look.t + a.dwell_s - tr.first_hit))
 
         self.prev_centre = a.centre
         if self.micro_dwell:

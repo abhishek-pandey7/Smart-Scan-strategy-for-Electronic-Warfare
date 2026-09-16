@@ -30,6 +30,12 @@ def intercepted_flashes(trace: Trace, truth: Truth) -> dict[int, dict[int, float
     return out
 
 
+def _rejection_time(trace: Trace, real_ids: set[int]) -> float | None:
+    """Mean seconds from a false alarm's detection to the scheduler dropping its track."""
+    times = [dt for _, e, dt in trace.logs.rejections if e < 0]
+    return float(np.mean(times)) if times else None
+
+
 def _threat_accuracy(trace: Trace, threat: dict[int, str]) -> float | None:
     """Share of labelled tracks whose latest predicted threat level matches the truth."""
     latest: dict[int, list[float]] = {}
@@ -101,7 +107,7 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
 
     looks_t = trace.t
     dwell = np.array([lk.action.dwell_s for lk in trace.looks])
-    false_alarms = sum(1 for lk in trace.looks if -1 in lk.detections)
+    false_alarms = sum(1 for lk in trace.looks for e in lk.detections if e < 0)
 
     return {
         "policy": trace.policy,
@@ -117,6 +123,8 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
         "high_threat_interception": high_hit / high_able if high_able else None,
         "high_threat_ttfi_s": float(np.mean(high_ttfi)) if high_ttfi else None,
         "threat_class_accuracy": _threat_accuracy(trace, threat),
+        "false_alarm_rejection_s": _rejection_time(trace, real_ids={e.id for e in truth.emitters}),
+        "real_tracks_dropped": sum(1 for _, e, _ in trace.logs.rejections if e >= 0),
         "pre_discovery_loss": n_pre / n_able if n_able else 0.0,
         "interception_ratio_per_emitter": float(np.mean(per_emitter_ratio)) if per_emitter_ratio else 0.0,
         "emitters_discovered": int(len(discovered)),

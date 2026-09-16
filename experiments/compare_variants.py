@@ -31,6 +31,7 @@ VARIANTS = {
     "short5_rt_cal": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
                       "retune_in_index": False, "calibrate_dwells": True},
     "threat": {"use_threat": True},
+    "threat_soft": {"use_threat": True, "threat_strength": 0.5, "threat_confidence": 0.6},
     "micro": {"micro_dwell": True},
     "micro_short5": {"micro_dwell": True, "dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100)},
     "short5_search_rt": {"dwells_s": (0.005, 0.010, 0.025, 0.050, 0.100), "retune_s": 0.0005,
