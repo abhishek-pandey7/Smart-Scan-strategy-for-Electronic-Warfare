@@ -36,6 +36,21 @@ def _rejection_time(trace: Trace, real_ids: set[int]) -> float | None:
     return float(np.mean(times)) if times else None
 
 
+def track_owners(trace: Trace) -> dict[int, tuple[int, float]]:
+    """Scheduler track id -> (truth emitter owning most of its pulses, that share). Empty when the scheduler
+    was given labelled pulses, in which case track ids already are emitter ids."""
+    acc: dict[int, dict[int, int]] = {}
+    for tid, counts in trace.logs.association:
+        a = acc.setdefault(tid, {})
+        for e, k in counts.items():
+            a[e] = a.get(e, 0) + k
+    out = {}
+    for tid, a in acc.items():
+        e, k = max(a.items(), key=lambda kv: kv[1])
+        out[tid] = (e, k / sum(a.values()))
+    return out
+
+
 def _association(trace: Trace) -> dict:
     """Deinterleaving quality from the scheduler's own track ids vs the truth emitters of their pulses."""
     log = trace.logs.association
@@ -64,9 +79,10 @@ def _association(trace: Trace) -> dict:
 
 def _threat_accuracy(trace: Trace, threat: dict[int, str]) -> float | None:
     """Share of labelled tracks whose latest predicted threat level matches the truth."""
+    owners = track_owners(trace)
     latest: dict[int, list[float]] = {}
     for _, e, probs in trace.logs.threats:
-        latest[e] = probs
+        latest[owners[e][0] if e in owners else e] = probs
     scored = [(("low", "medium", "high")[int(np.argmax(p))] == threat[e]) for e, p in latest.items() if threat.get(e)]
     return float(np.mean(scored)) if scored else None
 
@@ -121,7 +137,9 @@ def compute_metrics(trace: Trace, truth: Truth) -> dict:
 
     pred_err = []
     flash_like = {e for e in truth.flashes if e >= 0 and visibility_duty(truth, e) < FLASH_LIKE_DUTY}
+    owners = track_owners(trace)
     for t_now, e, pred in trace.logs.predictions:
+        e = owners[e][0] if e in owners else e       # self-deinterleaved tracks are scored against their owning emitter
         fl = truth.flashes.get(e)
         if fl is None or e not in flash_like:
             continue

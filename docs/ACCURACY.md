@@ -26,22 +26,24 @@ It is **not** "percent of decisions correct". The receiver hears about 1 GHz of 
 
 ## 3. Where PRIMES loses its points
 
-Every lost flash falls into one of two phases:
+Every flash is exactly one of: caught, **lost before discovery** (the emitter had not been found yet), or **missed while tracking** (the emitter was known but the receiver was elsewhere). The three shares add to 100 % per run (served by `/api/accuracy`, shown on the web Accuracy page):
 
-| Scenario | Lost **before** PRIMES first found the emitter (share of all flashes) | Caught **once tracked** (PRIMES) | Caught once tracked (oracle) |
-|---|---|---|---|
-| easy | 27 % | 95 % | 96 % |
-| lockout | 27 % | 91 % | 98 % |
-| popup | 39 % | 96 % | 98 % |
-| dense | 23 % | 85 % | 90 % |
-| mixed | 12 % | 89 % | 95 % |
-| real Turing | 7 % | **74 %** | 85 % |
+| Scenario | PRIMES caught | Lost before discovery | Missed while tracking | Oracle: missed while tracking | PRIMES caught once tracked |
+|---|---|---|---|---|---|
+| lockout | 69 % | 25 % | 6 % | 2 % | 91 % |
+| easy | 72 % | 24 % | 4 % | 4 % | 95 % |
+| popup | 62 % | 36 % | 2 % | 2 % | 96 % |
+| dense | 66 % | 22 % | 12 % | 10 % | 85 % |
+| mixed | 79 % | 11 % | 10 % | 6 % | 89 % |
+| **real Turing** | **70 %** | **6 %** | **25 %** | 15 % | 74 % |
+
+"Missed while tracking" = (1 − caught-once-tracked rate) × share of flashes from the first catch onwards. The first catch of each emitter is counted as caught, not as lost.
 
 ### 3.1 Loss before discovery (the biggest part on simulated scenarios)
 
 A flash from an emitter nobody has detected yet can only be caught by luck: there is no information about where or when it will be. The oracle loses almost nothing here (0–1.5 %) only because it already knows every emitter.
 
-On a single narrowband receiver this is largely a **physical limit, not a tuning failure**. Pop-up has the largest share (39 %) because four emitters appear mid-engagement and must be found from scratch.
+On a single narrowband receiver this is largely a **physical limit, not a tuning failure**. Pop-up has the largest share (36 %) because four emitters appear mid-engagement and must be found from scratch.
 
 ### 3.2 Loss while tracking (the real room for improvement on real data)
 
@@ -66,7 +68,7 @@ Note: the association comparison uses 3 tuning scenarios per family (disjoint fr
 
 | Lever | Attacks | Expected effect | Roadmap item |
 |---|---|---|---|
-| **Wideband cue** (coarse wideband detector points the narrowband receiver) | loss before discovery: 7–39 % | largest: emitters found in seconds instead of by sweeping | 7 |
+| **Wideband cue** (coarse wideband detector points the narrowband receiver) | loss before discovery: 6–36 % | largest: emitters found in seconds instead of by sweeping | 7 |
 | **Second receiver** (coordinated scheduling) | both phases | roughly halves search time; more tracking capacity | 7 |
 | **Joint parameter tuning** on tuning scenarios (w_new, staleness, λ) | balance between search and tracking | a few points, evenly spread | 8 |
 | **Look-ahead planning** (plan several dwells, not one) | tracking loss on intermittent real emitters (74 % vs 85 %) | closes part of the 11-point real-data gap | 9 |

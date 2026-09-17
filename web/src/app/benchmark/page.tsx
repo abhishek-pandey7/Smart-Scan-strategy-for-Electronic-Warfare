@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { type Benchmark, getBenchmark, policyColor, policyLabel } from "@/lib/api";
 
@@ -14,7 +15,8 @@ const GROUP_LABEL: Record<string, string> = {
   easy: "Easy", lockout: "Lock-out", popup: "Pop-up", dense: "Dense (40 emitters)", mixed: "Mixed periodic + intermittent",
   turing: "Turing dataset (real scenarios)",
 };
-const POLICY_ORDER = ["oracle", "primes", "primes_flat", "primes_no_ig", "dqn", "greedy", "raster", "random"];
+const POLICY_ORDER = ["oracle", "primes", "primes_pdw", "primes_threat", "primes_exist", "primes_no_micro", "primes_flat",
+  "primes_no_ig", "primes_fprior", "dqn", "greedy", "raster", "random"];
 
 type MetricId = (typeof METRICS)[number]["id"];
 
@@ -82,6 +84,7 @@ export default function BenchmarkPage() {
       <h1>Benchmark</h1>
       <p className="sub">
         Every scheduler replayed on identical truth. Dots are means, lines are 95% bootstrap confidence intervals.
+        {" "}Why the numbers are not 100%, and where the missing flashes go: <Link href="/accuracy">Accuracy</Link>.
       </p>
       {error && <p className="notice">{error}</p>}
       {bench && (

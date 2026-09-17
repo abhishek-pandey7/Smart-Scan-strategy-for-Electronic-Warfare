@@ -1,0 +1,64 @@
+{
+ "tag": "pdw1",
+ "note": "tuning scenarios (simulated seeds 10000+, Turing configs 5/50/100), disjoint from the benchmark",
+ "groups": [
+  {
+   "group": "easy",
+   "n": 3,
+   "labelled": 0.6483738130234946,
+   "self_sorted": 0.6483738130234945,
+   "purity": 1.0,
+   "tracks_per_emitter": 1.0,
+   "contaminated_tracks": 0.0
+  },
+  {
+   "group": "lockout",
+   "n": 3,
+   "labelled": 0.7482141695335808,
+   "self_sorted": 0.7482141695335808,
+   "purity": 1.0,
+   "tracks_per_emitter": 1.0,
+   "contaminated_tracks": 0.0
+  },
+  {
+   "group": "popup",
+   "n": 3,
+   "labelled": 0.73680163326563,
+   "self_sorted": 0.7311757542220293,
+   "purity": 0.9884278859723398,
+   "tracks_per_emitter": 1.0,
+   "contaminated_tracks": 0.03333333333333333
+  },
+  {
+   "group": "dense",
+   "n": 3,
+   "labelled": 0.7010864070822155,
+   "self_sorted": 0.6762582318001407,
+   "purity": 0.9944594389888661,
+   "tracks_per_emitter": 1.175179817498658,
+   "contaminated_tracks": 0.18118014725356216
+  },
+  {
+   "group": "mixed",
+   "n": 3,
+   "labelled": 0.7979105970464865,
+   "self_sorted": 0.7671676980621421,
+   "purity": 0.9883943981521637,
+   "tracks_per_emitter": 1.223727422003284,
+   "contaminated_tracks": 0.22596525096525097
+  },
+  {
+   "group": "turing",
+   "n": 3,
+   "labelled": 0.729712262675242,
+   "self_sorted": 0.7433559641802151,
+   "purity": 0.9897893762509379,
+   "tracks_per_emitter": 1.2097222222222221,
+   "contaminated_tracks": 0.07583333333333334
+  }
+ ],
+ "mean": {
+  "labelled": 0.7270164804377749,
+  "self_sorted": 0.7190909384702672
+ }
+}
