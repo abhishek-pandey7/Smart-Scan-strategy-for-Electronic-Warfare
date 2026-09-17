@@ -58,6 +58,9 @@ export function DecisionPanel({ run, cursor }: { run: PolicyRun; cursor: number 
 
 export function TrackTable({ run, emitters, cursor }: { run: PolicyRun; emitters: Emitter[]; cursor: number }) {
   const truth = new Map(emitters.map((e) => [e.id, e]));
+  // self-sorted runs number their own tracks; resolve each to the real radar that owns most of its pulses
+  const owners = run.owners;
+  const radarOf = (track: number) => (owners ? owners[String(track)]?.[0] : track);
   const latest = new Map<number, { t: number; period: number | null; conf: number | null; hits: number }>();
   for (const [t, e, period, conf] of run.tracks) {
     if (t > cursor) break;
@@ -76,16 +79,24 @@ export function TrackTable({ run, emitters, cursor }: { run: PolicyRun; emitters
   return (
     <table className="data">
       <thead>
-        <tr><th>Emitter</th><th>Flashes caught</th><th>Estimated period</th><th>True period</th><th>Confidence</th>{showThreat && <th>Threat (predicted / true)</th>}</tr>
+        <tr><th>{owners ? "Track → real radar" : "Emitter"}</th><th>Flashes caught</th><th>Estimated period</th><th>True period</th><th>Confidence</th>{showThreat && <th>Threat (predicted / true)</th>}</tr>
       </thead>
       <tbody>
         {rows.map(([e, r]) => {
-          const tp = truth.get(e)?.period_s ?? null;
+          const radar = radarOf(e);
+          const info = radar === undefined ? undefined : truth.get(radar);
+          const tp = info?.period_s ?? null;
           const est = r.period !== null && r.period > 0 ? r.period : null;
           const ok = est !== null && tp !== null && Math.abs(est / tp - 1) < 0.01;
           return (
             <tr key={e}>
-              <td title={truth.get(e)?.label}>{e} <span className="muted">{truth.get(e)?.label?.slice(0, 28)}</span></td>
+              <td title={info?.label}>
+                {owners
+                  ? <>#{e} → {radar === undefined ? "?" : radar < 0 ? <span className="muted">false alarm</span> : radar}
+                      {owners[String(e)] && owners[String(e)][1] < 0.9 ? <span className="muted"> (mixed)</span> : null} </>
+                  : e < 0 ? <span className="muted">false alarm </span> : `${e} `}
+                <span className="muted">{info?.label?.slice(0, 28)}</span>
+              </td>
               <td>{r.hits}</td>
               <td>{r.hits < 2 ? <span className="muted">learning (1 flash)</span> : est !== null ? `${est.toFixed(3)} s` : "intermittent"}{ok && r.hits >= 2 ? " ✓" : ""}</td>
               <td>{tp !== null ? `${tp.toFixed(3)} s` : "–"}</td>
@@ -93,7 +104,7 @@ export function TrackTable({ run, emitters, cursor }: { run: PolicyRun; emitters
               {showThreat && (
                 <td>
                   <span className={`threat threat-${threatOf.get(e) ?? "none"}`}>{threatOf.get(e) ?? "–"}</span>
-                  <span className="muted"> / {truth.get(e)?.threat || "–"}</span>
+                  <span className="muted"> / {info?.threat || "–"}</span>
                 </td>
               )}
             </tr>

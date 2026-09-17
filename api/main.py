@@ -22,7 +22,9 @@ from primes.eval.serialize import scenario_payload, trace_payload
 ROOT = Path(__file__).resolve().parents[1]
 RUN_CACHE = ROOT / "artifacts" / "runs"
 BENCHMARK = ROOT / "artifacts" / "benchmark.json"
-CACHE_VERSION = "v2"  # bump whenever scheduler behaviour changes
+ROBUSTNESS = ROOT / "artifacts" / "robustness.json"
+ASSOCIATION = ROOT / "artifacts" / "association.json"
+CACHE_VERSION = "v3"  # bump whenever scheduler behaviour or the run payload changes
 
 app = FastAPI(title="PRIMES API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -88,6 +90,43 @@ def get_run(run_id: str) -> dict:
     if not run_id.isalnum() or not path.exists():
         raise HTTPException(404, "run not found")
     return json.loads(path.read_text())
+
+
+@app.get("/api/accuracy")
+def accuracy() -> dict:
+    """Everything the accuracy page needs, pre-aggregated: where points are lost, robustness, association."""
+    if not BENCHMARK.exists():
+        raise HTTPException(404, "benchmark not generated yet: run python -m experiments.benchmark")
+    bench = json.loads(BENCHMARK.read_text())
+    breakdown = []
+    for group in dict.fromkeys(r["group"] for r in bench["rows"]):
+        for policy in ("raster", "greedy", "dqn", "primes", "oracle"):
+            sel = [r for r in bench["rows"] if r["group"] == group and r["policy"] == policy]
+            if not sel:
+                continue
+            # Per run, the three shares add to 1: caught; missed after the emitter was found (flashes from the
+            # first catch on, times the tracking miss rate); everything else was lost before discovery.
+            caught = [r["interception_ratio"] for r in sel]
+            missed = [(1 - (r["tracked_ratio"] or 0.0)) * (1 - r["pre_discovery_loss"]) if r["tracked_ratio"] is not None else 0.0
+                      for r in sel]
+            tracked = [r["tracked_ratio"] for r in sel if r["tracked_ratio"] is not None]
+            n = len(sel)
+            breakdown.append({
+                "group": group, "policy": policy, "n": n,
+                "caught": sum(caught) / n,
+                "missed_while_tracking": sum(missed) / n,
+                "lost_before_discovery": sum(max(0.0, 1 - c - m) for c, m in zip(caught, missed)) / n,
+                "tracked_ratio": sum(tracked) / len(tracked) if tracked else None,
+                "discovery_fraction": sum(r["discovery_fraction"] for r in sel) / n,
+            })
+    robustness = None
+    if ROBUSTNESS.exists():
+        rob = json.loads(ROBUSTNESS.read_text())
+        robustness = {"conditions": [{"id": c, "p_d": pd, "p_fa": pfa} for c, pd, pfa in rob["conditions"]],
+                      "summary": [{k: e.get(k) for k in ("condition", "group", "policy", "n", "interception_ratio", "false_alarms")}
+                                  for e in rob["summary"] if e["group"] in ("all", "turing")]}
+    association = json.loads(ASSOCIATION.read_text()) if ASSOCIATION.exists() else None
+    return {"generated": bench["generated"], "breakdown": breakdown, "robustness": robustness, "association": association}
 
 
 @app.get("/api/benchmark")

@@ -27,6 +27,8 @@ export type PolicyRun = {
   timeline: { t: number[]; intercepted: number[]; discovered: number[] };
   tracks: [number, number, number | null, number | null][];
   threats?: [number, number, number[]][];
+  /** Self-sorted runs only: scheduler track id -> [true emitter owning most of its pulses, share of its pulses]. */
+  owners?: Record<string, [number, number]>;
   predictions: { t: number; emitter: number; predicted: number; actual: number | null }[];
   explanations: Explanation[];
 };
@@ -55,23 +57,49 @@ async function asJson<T>(res: Response): Promise<T> {
   return res.json() as Promise<T>;
 }
 
+export type LossBreakdown = {
+  group: string; policy: string; n: number; caught: number; lost_before_discovery: number;
+  missed_while_tracking: number; tracked_ratio: number | null; discovery_fraction: number;
+};
+export type RobustnessEntry = {
+  condition: string; group: "all" | "turing"; policy: string; n: number;
+  interception_ratio: Stat; false_alarms: Stat | null;
+};
+export type AssociationGroup = {
+  group: string; n: number; labelled: number; self_sorted: number; purity: number | null;
+  tracks_per_emitter: number | null; contaminated_tracks: number | null;
+};
+export type Accuracy = {
+  generated: string;
+  breakdown: LossBreakdown[];
+  robustness: { conditions: { id: string; p_d: number; p_fa: number }[]; summary: RobustnessEntry[] } | null;
+  association: { note: string; groups: AssociationGroup[]; mean: { labelled: number; self_sorted: number } } | null;
+};
+
 export const getCatalog = () => fetch("/api/catalog").then((r) => asJson<Catalog>(r));
 
-export const createRun = (body: { scenario: string; seed: number; policies: string[]; p_d: number }) =>
+export const createRun = (body: { scenario: string; seed: number; policies: string[]; p_d: number; p_fa?: number }) =>
   fetch("/api/runs", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) })
     .then((r) => asJson<RunPayload>(r));
 
 export const getBenchmark = () => fetch("/api/benchmark").then((r) => asJson<Benchmark>(r));
+export const getAccuracy = () => fetch("/api/accuracy").then((r) => asJson<Accuracy>(r));
+
+/** PRIMES variants share PRIMES' explanation and learned-track panels. */
+export const isPrimes = (p: string) => p.startsWith("primes");
 
 /** Colour follows the policy, never its position on screen. */
 export const POLICY_SLOT: Record<string, number> = {
   primes: 1, raster: 2, dqn: 3, greedy: 4, random: 5, primes_flat: 6, oracle: 7, primes_no_ig: 8,
+  primes_pdw: 3, primes_threat: 5, primes_exist: 8, primes_fprior: 6, primes_no_micro: 8,
 };
 export const policyColor = (p: string) => `var(--series-${POLICY_SLOT[p] ?? 7})`;
 
 export const POLICY_LABEL: Record<string, string> = {
   primes: "PRIMES", raster: "Raster (open-loop)", dqn: "Double-DQN", greedy: "Greedy bandit",
   random: "Random", primes_flat: "PRIMES · flat prior", primes_no_ig: "PRIMES · no info gain", oracle: "Oracle (clairvoyant)",
+  primes_pdw: "PRIMES · raw pulses", primes_threat: "PRIMES · threat priority", primes_exist: "PRIMES · false-alarm rejection",
+  primes_fprior: "PRIMES · frequency-seeded search", primes_no_micro: "PRIMES · no micro dwells",
 };
 export const policyLabel = (p: string) => POLICY_LABEL[p] ?? p;
 
