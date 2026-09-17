@@ -96,6 +96,16 @@ The metadata names each emitter's radar type (`function`): **68 types**, e.g. AN
 
 **In the scheduler.** Online, from the partial and noisy parameters it has actually measured, PRIMES assigns the correct threat level to 53 % of tracks on real scenarios, and 86 % on simulated `dense`, whose emitters are sampled from the same population. Using the expected weight as a priority on the three real tuning scenarios lifts high-threat interception from 69.7 % to 77.6 % and cuts time to first high-threat catch from 9.8 s to 7.7 s. It stays a variant (`primes_threat`), not the default, because it costs overall interception on crowded simulated scenarios.
 
+## PDW features for deinterleaving (tuning configs 5, 50, 100)
+
+Stare files carry measured frequency, pulse width and AoA with realistic noise. Measured per emitter:
+
+- **AoA** is the stable short-term key: 1–6° peak-to-peak inside a 30 ms window. Over 30 s most emitters stay within 5–10°, but some drift tens of degrees and one close fly-by sweeps ~12°/s through ±180°.
+- **Pulse width is not a reliable key:** many radars interleave several PW modes within 30 ms (log-PW spread 0.7–4.7 inside a window).
+- **Frequency:** fixed emitters jitter by 1–4 MHz; agile ones span up to ~1 GHz.
+
+A bearing-first deinterleaver with an alpha-beta bearing tracker gets 0.98–1.00 pulse purity and 1.0–1.5 tracks per emitter on these configs under a raster schedule (`experiments/association_quality.py`). In the scheduler loop on the three tuning configs, interception is 74.3 % with own deinterleaving vs 73.0 % with truth labels.
+
 ## Robustness on real scenarios (11 benchmark configs)
 
 PRIMES interception on the 11 real stare-mode scenarios:

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from primes.core.types import CENTRES_MHZ, N_CENTRES, Action, Look
+from primes.core.types import CENTRES_MHZ, N_CENTRES, N_MIN_PULSES, Action, Look
 
 # 5 ms looks make search much faster; the micro dwell controller keeps them honest by extending a
 # look that heard only part of a flash and by never using one on an emitter whose pulses are too
@@ -31,8 +31,14 @@ class PrimesLite(Policy):
                  retune_in_index: bool = True, min_track_dwell_s: float = 0.0, calibrate_dwells: bool = False,
                  micro_dwell: bool = True, extend_s: float = 0.005, max_extensions: int = 3,
                  use_threat: bool = False, threat_strength: float = 1.0, threat_confidence: float = 0.0,
-                 use_existence: bool = False,
+                 use_existence: bool = False, association: str = "ideal",
                  name: str | None = None):
+        # association="ideal": pulses arrive labelled by emitter (upstream deinterleaving assumed perfect).
+        # "pdw": the scheduler receives unlabelled pulse descriptor words and deinterleaves them itself.
+        if association not in ("ideal", "pdw"):
+            raise ValueError(f"unknown association {association!r}")
+        self.association = association
+        self.needs_pdw = association == "pdw"
         # Micro dwell controller: search looks end as soon as an emitter is confirmed, and a look that
         # heard 1-2 pulses near its end is extended on the same centre instead of hopping away.
         self.micro_dwell, self.extend_s, self.max_extensions = micro_dwell, extend_s, max_extensions
@@ -85,6 +91,9 @@ class PrimesLite(Policy):
         self.step = 0
         self.centre_phase = ctx.rng.random(N_CENTRES)
         self._last = {}
+        if self.needs_pdw:
+            from primes.associate.deinterleave import Associator
+            self.associator = Associator(N_MIN_PULSES)
 
     # ------------------------------------------------------------------ decision
     def act(self, t: float) -> Action:
@@ -168,6 +177,8 @@ class PrimesLite(Policy):
 
     # ------------------------------------------------------------------ learning from hits and misses
     def update(self, look: Look) -> None:
+        if self.needs_pdw:
+            look = self._associate(look)
         a = look.action
         detected = frozenset(look.detections)        # false alarms carry unique negative ids and are tracked like any emitter
         new_freqs = [float(np.median(look.freqs[e])) if e in look.freqs else float(CENTRES_MHZ[a.centre])
@@ -217,11 +228,22 @@ class PrimesLite(Policy):
         if self.micro_dwell:
             end = look.t + a.dwell_s
             near_end = [e for e, last in look.partial.items()
-                        if e >= 0 and e not in detected and end - last <= 0.003]
+                        if (e >= 0 or self.needs_pdw) and e not in detected and end - last <= 0.003]
             if near_end and self._extensions < self.max_extensions:
                 self._extend_centre, self._extensions = a.centre, self._extensions + 1
             else:
                 self._extend_centre, self._extensions = None, 0
+
+    def _associate(self, look: Look) -> Look:
+        """Replace truth-labelled detections with the scheduler's own deinterleaved tracks."""
+        x = look.pdw if look.pdw is not None else np.empty((0, 4))
+        det, fq, pws, partial, members = self.associator.associate(x[:, 0], x[:, 1], x[:, 2], x[:, 3],
+                                                                   look.t + look.action.dwell_s)
+        if look.pdw_truth is not None:                   # bookkeeping for association metrics only
+            for tid, idx in members.items():
+                ids, n = np.unique(look.pdw_truth[idx], return_counts=True)
+                self.logs.association.append((tid, dict(zip(ids.tolist(), n.tolist()))))
+        return Look(t=look.t, action=look.action, detections=det, freqs=fq, pws=pws, partial=partial)
 
     def dwell_calibration(self, pseudo: float = 3.0) -> np.ndarray:
         return np.clip((self.cal_hits + pseudo) / (self.cal_pred + pseudo), 0.2, 1.2)
