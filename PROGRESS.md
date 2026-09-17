@@ -27,6 +27,7 @@ _Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 
 | Full solution / PPT content (4 architecture views) | `docs/PRIMES_FULL_ARCHITECTURE.md` |
 | Prototype scope doc | `docs/PRIMES_PROTOTYPE.md` |
 | Dataset findings | `docs/DATASET_NOTES.md` |
+| What the accuracy numbers mean, where points are lost, how to raise them | `docs/ACCURACY.md` |
 | Benchmark results (evidence) | `artifacts/benchmark.json`, shown on the web benchmark page |
 | Original plan | `PLAN.md` |
 | Code | stacked feature branches, see below |
