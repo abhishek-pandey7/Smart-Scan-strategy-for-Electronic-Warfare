@@ -32,7 +32,7 @@ def replay(policy: Policy, truth: Truth, priors: Priors, seed: int = 0, p_d: flo
     if hasattr(policy, "bind_truth"):
         policy.bind_truth(truth)
     policy.reset(Context(horizon_s=truth.horizon_s, rng=pol_rng, priors=priors))
-    rx = Receiver(truth, rx_rng, p_d=p_d, p_fa=p_fa)
+    rx = Receiver(truth, rx_rng, p_d=p_d, p_fa=p_fa, pdw=getattr(policy, "needs_pdw", False))
 
     looks, explanations = [], []
     t, prev, window_start = 0.0, None, 0.0
@@ -47,6 +47,7 @@ def replay(policy: Policy, truth: Truth, priors: Priors, seed: int = 0, p_d: flo
         look = rx.observe(t, a, window_start=window_start if contiguous else None)
         spent = look.t + look.action.dwell_s - t          # actual time used this step (stop_on_detect may shorten it)
         policy.update(look)
+        look.pdw = look.pdw_truth = None                  # raw pulses are large; the trace keeps detections only
         looks.append(look)
         if explain_every and len(looks) % explain_every == 0:
             ex = policy.explain()
