@@ -9,10 +9,15 @@ import HeadToHead from "@/components/HeadToHead";
 import ScenarioBrief from "@/components/ScenarioBrief";
 import { briefing } from "@/lib/scenarios";
 import {
-  type Catalog, type RunPayload, createRun, getCatalog, num, pct, policyColor, policyLabel, POLICY_SLOT,
+  type Catalog, type RunPayload, createRun, getCatalog, isPrimes, num, pct, policyColor, policyLabel, POLICY_SLOT,
 } from "@/lib/api";
 
 const SPEEDS = [1, 4, 10];
+const FALSE_ALARMS = [
+  { value: 0, label: "None" },
+  { value: 0.005, label: "Realistic (~20 per run)" },
+  { value: 0.02, label: "Heavy (~70 per run)" },
+];
 
 export default function ReplayPage() {
   return (
@@ -23,7 +28,7 @@ export default function ReplayPage() {
 }
 
 function Replay() {
-  // Shareable demo links: /?scenario=lockout&seed=0&a=raster&b=primes&autorun=1&t=60
+  // Shareable demo links: /?scenario=lockout&seed=0&a=raster&b=primes&pd=1&fa=0&autorun=1&t=60
   const params = useSearchParams();
   const [catalog, setCatalog] = useState<Catalog | null>(null);
   const [scenario, setScenario] = useState(params.get("scenario") ?? "lockout");
@@ -31,6 +36,7 @@ function Replay() {
   const [policyA, setPolicyA] = useState(params.get("a") ?? "raster");
   const [policyB, setPolicyB] = useState(params.get("b") ?? "primes");
   const [pD, setPD] = useState(Number(params.get("pd") ?? 1));
+  const [pFa, setPFa] = useState(Number(params.get("fa") ?? 0));
   const [data, setData] = useState<RunPayload | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -41,11 +47,11 @@ function Replay() {
 
   useEffect(() => { getCatalog().then(setCatalog).catch((e) => setError(String(e))); }, []);
 
-  const execute = useCallback(async (req: { scenario: string; seed: number; a: string; b: string; pD: number }, startAt?: number) => {
+  const execute = useCallback(async (req: { scenario: string; seed: number; a: string; b: string; pD: number; pFa: number }, startAt?: number) => {
     setLoading(true); setError(null); setPlaying(false);
     try {
       const policies = Array.from(new Set([req.a, req.b]));
-      const payload = await createRun({ scenario: req.scenario, seed: req.seed, policies, p_d: req.pD });
+      const payload = await createRun({ scenario: req.scenario, seed: req.seed, policies, p_d: req.pD, p_fa: req.pFa });
       setData(payload);
       setCursor(startAt ?? 0);
       setPlaying(startAt === undefined);
@@ -56,7 +62,7 @@ function Replay() {
     }
   }, []);
 
-  const run = () => execute({ scenario, seed, a: policyA, b: policyB, pD });
+  const run = () => execute({ scenario, seed, a: policyA, b: policyB, pD, pFa });
 
   const autorun = params.has("autorun");
   const startAt = params.has("t") ? Number(params.get("t")) : undefined;
@@ -64,7 +70,7 @@ function Replay() {
   useEffect(() => {
     if (!catalog || !autorun || autoStarted.current) return;
     autoStarted.current = true;
-    void execute({ scenario, seed, a: policyA, b: policyB, pD }, startAt);
+    void execute({ scenario, seed, a: policyA, b: policyB, pD, pFa }, startAt);
   }, [catalog, autorun, startAt, execute]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const horizon = data?.scenario.horizon_s ?? 60;
@@ -86,7 +92,10 @@ function Replay() {
   }, [playing, speed, horizon]);
 
   const shown = useMemo(() => (data ? Object.keys(data.runs) : []), [data]);
-  const primesRun = data?.runs.primes;
+  // explanation panels follow a PRIMES receiver (B first, since B is PRIMES in the default comparison)
+  const primesName = [policyB, policyA].find((p) => isPrimes(p) && data?.runs[p]);
+  const primesRun = primesName ? data?.runs[primesName] : undefined;
+  const selfSorted = shown.filter((p) => typeof data?.runs[p].metrics.association_purity === "number");
 
   const series = (key: "intercepted" | "discovered") =>
     shown.map((p) => ({ key: p, label: policyLabel(p), color: policyColor(p), x: data!.runs[p].timeline.t, y: data!.runs[p].timeline[key] }));
@@ -125,7 +134,13 @@ function Replay() {
         <div className="field">
           <label htmlFor="pd">Detection reliability</label>
           <select id="pd" value={pD} onChange={(e) => setPD(Number(e.target.value))}>
-            {[1, 0.9, 0.7].map((v) => <option key={v} value={v}>{v}</option>)}
+            {[1, 0.9, 0.7, 0.5].map((v) => <option key={v} value={v}>{v === 1 ? "1 (every flash in view)" : v}</option>)}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor="fa">False alarms</label>
+          <select id="fa" value={pFa} onChange={(e) => setPFa(Number(e.target.value))}>
+            {FALSE_ALARMS.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
         </div>
         <button className="btn" onClick={run} disabled={loading || !catalog}>
@@ -164,6 +179,13 @@ function Replay() {
             </select>
           </div>
 
+          {selfSorted.length > 0 && (
+            <div className="notice">
+              <strong>Raw pulses mode:</strong> {selfSorted.map(policyLabel).join(", ")} received unlabelled pulses and sorted them into radars itself
+              (by bearing and frequency) before deciding where to listen. Its track numbers are its own; the table below shows which real radar each one turned out to be.
+            </div>
+          )}
+
           <h2 style={{ marginTop: 8 }}>Final results for the whole run</h2>
           <div className="tiles">
             {[
@@ -171,6 +193,8 @@ function Replay() {
               { label: "Radars found", fmt: (p: string) => `${data.runs[p].metrics.emitters_discovered} of ${data.runs[p].metrics.emitters}` },
               { label: "Average time to first catch", fmt: (p: string) => num(data.runs[p].metrics.ttfi_mean_s, 1, " s") },
               { label: "Next flash predicted correctly", fmt: (p: string) => num(data.runs[p].metrics.prediction_correct_pct, 0, "%") },
+              ...(selfSorted.length ? [{ label: "Pulses sorted to the right radar", fmt: (p: string) => pct(data.runs[p].metrics.association_purity) }] : []),
+              ...(data.request.p_fa > 0 ? [{ label: "False alarms heard", fmt: (p: string) => num(data.runs[p].metrics.false_alarms, 0) }] : []),
             ].map((tile) => (
               <div className="tile" key={tile.label}>
                 <div className="label">{tile.label}</div>
@@ -217,12 +241,12 @@ function Replay() {
           {primesRun && (
             <div className="grid-2">
               <div className="card">
-                <h2>Why PRIMES looked there</h2>
+                <h2>Why {policyLabel(primesName!)} looked there</h2>
                 <p className="sub" style={{ marginBottom: 10 }}>PRIMES explains every choice: what it expected to catch there, and why it beat the alternatives.</p>
                 <DecisionPanel run={primesRun} cursor={cursor} />
               </div>
               <div className="card">
-                <h2>What PRIMES has learned</h2>
+                <h2>What {policyLabel(primesName!)} has learned</h2>
                 <p className="sub" style={{ marginBottom: 10 }}>Radars PRIMES has worked out on its own, from what it caught and missed. No prior intelligence.</p>
                 <TrackTable run={primesRun} emitters={data.scenario.emitters} cursor={cursor} />
               </div>

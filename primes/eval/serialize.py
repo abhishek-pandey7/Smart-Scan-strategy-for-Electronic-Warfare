@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 
 from primes.core.types import ACCEPT_HALF_WIDTH_MHZ, CENTRES_MHZ, N_MIN_PULSES, Truth
-from primes.eval.metrics import compute_metrics, intercepted_flashes
+from primes.eval.metrics import compute_metrics, intercepted_flashes, track_owners
 from primes.eval.replay import Trace
 
 MAX_FLASHES = 6000
@@ -60,8 +60,10 @@ def trace_payload(trace: Trace, truth: Truth) -> dict:
                 "intercepted": np.searchsorted(ev_t, grid, side="right").tolist(),
                 "discovered": np.searchsorted(disc_t, grid, side="right").tolist()}
 
+    owners = track_owners(trace)
     predictions = []
     for t_now, e, pred in trace.logs.predictions:
+        e = owners[e][0] if e in owners else e
         fl = truth.flashes.get(e)
         nxt = fl[(fl[:, 0] > t_now + 0.02) & (fl[:, 2] >= N_MIN_PULSES), 0] if fl is not None else []
         predictions.append({"t": _r(t_now), "emitter": e, "predicted": _r(pred),
@@ -76,6 +78,8 @@ def trace_payload(trace: Trace, truth: Truth) -> dict:
         "timeline": timeline,
         "tracks": [[_r(t), e, _r(T), _r(c, 3)] for t, e, T, c in trace.logs.tracks],
         "threats": [[_r(t), e, p] for t, e, p in trace.logs.threats],
+        # for self-deinterleaved runs: track id -> [truth emitter owning most of its pulses, share of pulses]
+        "owners": {str(tid): [e, _r(share, 3)] for tid, (e, share) in owners.items()},
         "predictions": predictions,
         "explanations": [ex for _, ex in trace.explanations[::step]],
     }
