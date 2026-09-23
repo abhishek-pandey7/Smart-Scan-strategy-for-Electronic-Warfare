@@ -1,9 +1,9 @@
-# Smart Scan Strategy for Electronic Warfare — PRIMES
+# Smart Scan Strategy for Electronic Warfare
 
-**P**redictive **R**estless **I**ndex for **M**ultiband **E**lectronic **S**upport: a machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on emitters.
+A machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on emitters.
 
-- Full design and PPT content: [`docs/PRIMES_FULL_ARCHITECTURE.md`](docs/PRIMES_FULL_ARCHITECTURE.md) (on the docs branch)
-- Prototype scope: [`docs/PRIMES_PROTOTYPE.md`](docs/PRIMES_PROTOTYPE.md)
+- Full design and PPT content: [`docs/SMART_SCAN_FULL_ARCHITECTURE.md`](docs/SMART_SCAN_FULL_ARCHITECTURE.md)
+- Prototype scope: [`docs/SMART_SCAN_PROTOTYPE.md`](docs/SMART_SCAN_PROTOTYPE.md)
 - Dataset findings: [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md)
 - Original plan: [`PLAN.md`](PLAN.md)
 
@@ -13,7 +13,7 @@
 |---|---|
 | Receiver model (Turing replica: 36 centres, ±500 MHz, 2.15 s raster), scenarios, pulse-level truth | `primes/env`, `primes/core` |
 | Learned emitter priors from 2,500 Turing training scenarios (HF API) | `primes/data/fit_priors.py` → `primes/assets/priors.json` |
-| **PRIMES-lite**: periodic + Gilbert–Elliott track models, undiscovered-emitter belief with learned visibility, value-per-time index with information gain | `primes/predict`, `primes/policies/primes_lite.py` |
+| **Smart Scan**: periodic + Gilbert–Elliott track models, undiscovered-emitter belief with learned visibility, value-per-time index with information gain | `primes/predict`, `primes/policies/primes_lite.py` |
 | Baselines: raster, random, hit-rate bandit, clairvoyant oracle | `primes/policies/baselines.py` |
 | **Double-DQN** comparator (Stable-Baselines3) | `primes/rl` |
 | Exact replay, metrics, multi-seed benchmark with bootstrap CIs | `primes/eval`, `experiments/benchmark.py` |
@@ -42,8 +42,10 @@ uvicorn api.main:app --port 8000
 cd web && npm install && npm run dev                   # http://localhost:3000
 ```
 
-Demo link that auto-runs a replay:
-`http://localhost:3000/?scenario=lockout&seed=0&a=raster&b=primes&autorun=1`
+Demo (mission page, all receivers at once):
+`http://localhost:3000/mission?scenario=lockout`
+
+Optional: point the Next.js rewrite at a non-default API with `SMARTSCAN_API_URL` (default `http://127.0.0.1:8000`).
 
 Turing scenarios (`turing:<config>`) are fetched from Hugging Face on first use and need accepted access plus `huggingface-cli login`. They are stored under `data/raw/` (git-ignored).
 

@@ -1,9 +1,9 @@
-# PRIMES — Smart Scan Strategy for Electronic Warfare
+# Smart Scan Strategy for Electronic Warfare
 
-**P**redictive **R**estless **I**ndex for **M**ultiband **E**lectronic **S**upport — a machine-learning Electronic Support (ES) receiver scheduler that learns *when* and *where* to look, with no prior intelligence on emitters.
+A machine-learning Electronic Support (ES) receiver scheduler that learns *when* and *where* to look, with no prior intelligence on emitters.
 
 > Sections follow the SIH submission structure: **Ideation → Technical Approach → Feasibility & Viability → Impact & Benefits → Research & References.**
-> Every number marked *measured* comes from the committed benchmark (`artifacts/benchmark.json`) or from the dataset analysis in [`DATASET_NOTES.md`](DATASET_NOTES.md). What is built vs planned is listed in [`PRIMES_PROTOTYPE.md`](PRIMES_PROTOTYPE.md) and `PROGRESS.md`.
+> Every number marked *measured* comes from the committed benchmark (`artifacts/benchmark.json`) or from the dataset analysis in [`DATASET_NOTES.md`](DATASET_NOTES.md). What is built vs planned is listed in [`SMART_SCAN_PROTOTYPE.md`](SMART_SCAN_PROTOTYPE.md) and `PROGRESS.md`.
 > Mermaid diagrams render on GitHub; paste a block into <https://mermaid.live> to export SVG/PNG for slides.
 
 ---
@@ -34,9 +34,9 @@ Scanning faster does not fix lock-out — it can cause it.
 We measured the real emitter population (128,252 emitters from 2,500 scenarios) before designing anything. Two findings shaped the entire architecture:
 
 1. **Scan periods are not arbitrary.** **96.2 % of radar scan periods fall on just 22 discrete values** (2 s, 10 s, 1 s, 4 s, 5 s, 2.5 s, …), because radars are built from a finite set of rotation rates. Within the 0.5–30 s range that matters for a short engagement, 19 values carry 96.3 % of the mass.
-   → After a **single** catch, the question "when does this radar come back?" has ~19 candidate answers, not a continuum. One more catch, or a few well-placed misses, settles it.
+ → After a **single** catch, the question "when does this radar come back?" has ~19 candidate answers, not a continuum. One more catch, or a few well-placed misses, settles it.
 2. **Real emitters are not all clean flashes.** In observed truth, the median emitter is receivable **32 % of the time** in long irregular stretches (sidelobes, wide beams, moving platforms); only **12 %** behave like short periodic flashes.
-   → A single "periodic flash" model would be wrong for most of the population. Two competing models are needed per emitter.
+ → A single "periodic flash" model would be wrong for most of the population. Two competing models are needed per emitter.
 
 **Therefore:** don't ask a neural network to rediscover radar physics from scratch. Model what is known (periodicity, on/off behaviour, detection geometry) explicitly and *learn the parameters online from hits and misses*, then let learning handle the residue.
 
@@ -47,7 +47,7 @@ We measured the real emitter population (128,252 emitters from 2,500 scenarios) 
 | Alternative | Why not the answer |
 |---|---|
 | **Faster / optimised periodic sweep** (incl. Farey/Diophantine-optimal sweep periods) | Optimal only with a known threat list; the problem statement removes it. Retained as the **baseline** and as theory for the lock-out slide. |
-| **Deep RL over raw observations (DQN/PPO)** — the common hackathon answer and the current published ES approach | Sample-hungry: a 30–60 s engagement gives ~7 flashes per emitter, and the first 2–3 must be enough. Opaque to an operator, no worst-case guarantee. **Measured**: our fairly-tuned Double-DQN reaches 4–21 % vs PRIMES' 62–79 %. |
+| **Deep RL over raw observations (DQN/PPO)** — the common hackathon answer and the current published ES approach | Sample-hungry: a 30–60 s engagement gives ~7 flashes per emitter, and the first 2–3 must be enough. Opaque to an operator, no worst-case guarantee. **Measured**: our fairly-tuned Double-DQN reaches 4–21 % vs Smart Scan's 62–79 %. |
 | **Greedy / hit-rate bandit** | Cannot represent *phase*: it knows a band was productive, not *when* it will be productive. Measured 8–20 %. |
 | **Exact POMDP solution** | Intractable at 36 centres × dozens of emitters with continuous timing state. |
 | **Restless bandit with a Gilbert–Elliott channel model only** (classical dynamic spectrum access) | Right control paradigm, wrong emitter model: a rotating radar is not a two-state Markov channel. We keep the paradigm and replace the model. |
@@ -68,7 +68,7 @@ We measured the real emitter population (128,252 emitters from 2,500 scenarios) 
 
 ## 2.1 System overview
 
-PRIMES is a closed loop: **observe → associate → predict → score → schedule → learn.**
+Smart Scan is a closed loop: **observe → associate → predict → score → schedule → learn.**
 
 ```mermaid
 flowchart TB
@@ -176,7 +176,7 @@ A grid over mean on/off durations; the belief that an emitter is "on" relaxes to
 Per 250 MHz cell, an expected count of emitters not yet found:
 - **thinned** by each look that covered it (Poisson thinning);
 - **grown** by a pop-up hazard, so no band can be written off permanently;
-- scaled by an **online-learned visibility factor κ**, fitted from how often looks actually discover new emitters. On real data κ settles at **4–10×**, i.e. real emitters are far more visible than metadata implies. Without it, PRIMES under-searches on real data (measured: discovery 22/35 → 34/35 emitters when κ was introduced).
+- scaled by an **online-learned visibility factor κ**, fitted from how often looks actually discover new emitters. On real data κ settles at **4–10×**, i.e. real emitters are far more visible than metadata implies. Without it, Smart Scan under-searches on real data (measured: discovery 22/35 → 34/35 emitters when κ was introduced).
 
 ## 2.4 The decision rule
 
@@ -189,7 +189,7 @@ $$
 - **Value per unit time** makes 5 ms and 100 ms options comparable, and makes the retune cost `τ` explicit.
 - **Overlap-aware coverage:** each centre accepts ±500 MHz, so neighbouring centres overlap; sums run over the *unique* tracks and cells a centre covers, never double-counting.
 - **Staleness weight** `W_e(t)`: value grows with time since that emitter was last caught, so no single loud emitter can monopolise the receiver.
-- **Resolution value:** a catch on an unconfirmed periodic track is worth its own flash *plus* the future flashes that confirming the period would unlock. This is what makes PRIMES invest two cheap looks now to own an emitter for the rest of the mission (measured: lock-out tracking 70 % → 95 %).
+- **Resolution value:** a catch on an unconfirmed periodic track is worth its own flash *plus* the future flashes that confirming the period would unlock. This is what makes Smart Scan invest two cheap looks now to own an emitter for the rest of the mission (measured: lock-out tracking 70 % → 95 %).
 - **Appointments:** no dwell may run past a confident track's predicted flash unless it covers that emitter.
 - **Threat priority (optional mission profile):** `W_e(t)` can be multiplied by the emitter's *expected* threat weight (low 0.3 / medium 1 / high 3). The weight comes from a classifier over what the receiver has actually measured about that emitter: frequency, PRI set, pulse widths, scan period and flash width. The estimate firms up as evidence accumulates and is blended toward 1 while uncertain. *Measured: it moves receiver time toward high-threat radars on real scenarios but costs overall interception on crowded simulated ones, so it is a switch, not the default (§3.1).*
 - **Information gain** `IG`: expected bits about the timing hypotheses, in closed form for a binary outcome. *Measured honestly: no benefit; removing it is slightly better on 5 of 6 scenario families within overlapping intervals. Kept as an ablated component and not claimed as a source of gain.*
@@ -254,7 +254,7 @@ flowchart LR
 A learned scheduler on mission hardware must answer "how can this fail, and who can make it fail?"
 
 **Operational security**
-- **Passive by construction.** ES is receive-only: PRIMES emits nothing, so it adds no probability of intercept or geolocation risk for own platform.
+- **Passive by construction.** ES is receive-only: Smart Scan emits nothing, so it adds no probability of intercept or geolocation risk for own platform.
 - **Unpredictability.** Search-mode dither means the look sequence is not a fixed pattern an adversary could model even with knowledge of the algorithm.
 
 **Adversarial robustness (the ML-specific threat)**
@@ -283,7 +283,7 @@ A learned scheduler on mission hardware must answer "how can this fail, and who 
 ```mermaid
 flowchart TB
     subgraph EDGE["Edge node (per platform)"]
-        RX["ES receiver(s)"] --> RT["PRIMES runtime<br/>associate · predict · index · governors"]
+        RX["ES receiver(s)"] --> RT["Smart Scan runtime<br/>associate · predict · index · governors"]
         RT --> LOG["Decision log + track store"]
     end
     subgraph COORD["Multi-receiver coordination"]
@@ -342,7 +342,7 @@ Not a proposal: a working prototype with measured results.
 
 **Headline measured results** (610-run benchmark, 10 seeds per simulated family, 11 real dataset scenarios):
 
-| Scenario | Open-loop raster | Greedy bandit | Double-DQN | **PRIMES** | Clairvoyant oracle |
+| Scenario | Open-loop raster | Greedy bandit | Double-DQN | **Smart Scan** | Clairvoyant oracle |
 |---|---|---|---|---|---|
 | lock-out | 1.0 % | 7.6 % | 5.8 % | **69.1 %** | 98.3 % |
 | easy | 5.6 % | 14.4 % | 4.4 % | **72.3 %** | 96.1 % |
@@ -351,11 +351,11 @@ Not a proposal: a working prototype with measured results.
 | mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **78.8 %** | 94.3 % |
 | **real dataset scenarios** | 16.8 % | 20.3 % | 15.3 % | **69.8 %** | 84.8 % |
 
-Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %); **91–98 %** of next-flash predictions within 10 ms on periodic emitters; **85–96 %** of an emitter's flashes caught once it is tracked; time to first catch on lock-out **55.7 s → 17.2 s** and on easy **36.9 s → 16.6 s**. PRIMES' 95 % intervals do not overlap any non-oracle rival's on any family.
+Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %); **91–98 %** of next-flash predictions within 10 ms on periodic emitters; **85–96 %** of an emitter's flashes caught once it is tracked; time to first catch on lock-out **55.7 s → 17.2 s** and on easy **36.9 s → 16.6 s**. Smart Scan's 95 % intervals do not overlap any non-oracle rival's on any family.
 
 **Robustness to imperfect detection.** 1,008 runs: 7 conditions × 4 policies × 25 simulated and 11 real scenarios. Each condition varies one factor; interception is pooled over all 36 scenarios.
 
-| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+| Condition | Raster | Greedy | **Smart Scan** (95 % CI) | Oracle | Smart Scan / oracle | Smart Scan on real scenarios |
 |---|---|---|---|---|---|---|
 | nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
 | P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
@@ -365,13 +365,13 @@ Supporting measurements: **95 % of lock-out emitters discovered** (raster 15 %);
 | P_fa = 0.005 (~23 / run) | 10.3 % | 16.6 % | **66.8 %** [62.7, 70.8] | 91.6 % | 0.73 | 70.3 % |
 | P_fa = 0.02 (~70 / run, stress) | 10.3 % | 16.4 % | **58.4 %** [54.0, 62.9] | 91.6 % | 0.64 | 66.8 % |
 
-- **Missed detections degrade PRIMES gracefully, in step with the physics.** At P_d = 0.5, half of all flashes are unobservable even to the clairvoyant oracle. PRIMES keeps 0.67 of the oracle's score and stays **6.5–7× raster** throughout. Its evidence model treats a miss as `(1 − P_d)` evidence, so a missed flash weakens a timing hypothesis instead of deleting it.
-- **False alarms cost little at realistic rates.** Up to ~23 false emitters per run, interception falls by at most 2 points. Only at a stress rate (~70 per run) does it fall to 58 %. On real scenarios it falls just 3 points, to 66.8 %, because real emitters there give their tracks repeated hits that false tracks never get. PRIMES is still 5.7× raster at the stress rate.
+- **Missed detections degrade Smart Scan gracefully, in step with the physics.** At P_d = 0.5, half of all flashes are unobservable even to the clairvoyant oracle. Smart Scan keeps 0.67 of the oracle's score and stays **6.5–7× raster** throughout. Its evidence model treats a miss as `(1 − P_d)` evidence, so a missed flash weakens a timing hypothesis instead of deleting it.
+- **False alarms cost little at realistic rates.** Up to ~23 false emitters per run, interception falls by at most 2 points. Only at a stress rate (~70 per run) does it fall to 58 %. On real scenarios it falls just 3 points, to 66.8 %, because real emitters there give their tracks repeated hits that false tracks never get. Smart Scan is still 5.7× raster at the stress rate.
 - **Open-loop raster is unaffected by false alarms only because it ignores what it hears**, which is also why it catches 10 %.
 
 **Threat-aware priority** (tuning scenarios, disjoint from the benchmark):
 
-| | PRIMES | PRIMES + threat priority |
+| | Smart Scan | Smart Scan + threat priority |
 |---|---|---|
 | Real scenarios: high-threat flashes intercepted | 69.7 % | **77.6 %** |
 | Real scenarios: time to first catch of a high-threat radar | 9.8 s | **7.7 s** |
@@ -421,7 +421,7 @@ Each radar type in the dataset has one parameter template, so the classifier beh
 | **TRL 5–6** | Integration with an existing ESM suite as a scheduling module; multi-receiver coordination; trials against instrumented emitters | 6–12 months |
 | **TRL 6+** | Multi-platform fusion; certification evidence pack (determinism, fallback, audit); field trials | 12+ months |
 
-**Viability as a product:** PRIMES is a **software upgrade to existing receivers** — same antenna, same front-end, better decisions. That is the cheapest possible path to capability, and it degrades gracefully to today's behaviour if switched off.
+**Viability as a product:** Smart Scan is a **software upgrade to existing receivers** — same antenna, same front-end, better decisions. That is the cheapest possible path to capability, and it degrades gracefully to today's behaviour if switched off.
 
 ---
 
@@ -490,8 +490,8 @@ Why each matters operationally: an ES system exists to answer *what is out there
 | 96.2 % of scan periods on 22 discrete values (128,252 emitters) | metadata streamed from 2,500 training scenarios | `primes/data/fit_priors.py` |
 | Real emitters: median 32 % visibility duty; only 12 % flash-like | illumination analysis of stare-mode truth | `DATASET_NOTES.md` |
 | Open-loop intercepts 6.3 % of narrow flashes / 11.5 % of all | exact replay of the real schedule on 11 scenarios | `DATASET_NOTES.md` |
-| PRIMES vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs, 5 ablations | 610-run benchmark | `experiments/benchmark.py`, `artifacts/benchmark.json` |
-| PRIMES keeps 0.67–0.75 of oracle interception from P_d = 1 down to 0.5, and loses ≤ 2 points up to ~23 false alarms per run | 1,008-run robustness sweep | `experiments/robustness.py`, `artifacts/robustness.json` |
+| Smart Scan vs 4 baselines + DQN + oracle, 6 scenario families, bootstrap CIs, 5 ablations | 610-run benchmark | `experiments/benchmark.py`, `artifacts/benchmark.json` |
+| Smart Scan keeps 0.67–0.75 of oracle interception from P_d = 1 down to 0.5, and loses ≤ 2 points up to ~23 false alarms per run | 1,008-run robustness sweep | `experiments/robustness.py`, `artifacts/robustness.json` |
 | Threat priority: real-scenario high-threat interception 69.7 % → 77.6 %, first catch 9.8 → 7.7 s; unseen-type threat level 63 % vs 48.5 % chance | variant sweep; leave-one-radar-type-out | `experiments/compare_variants.py`, `primes/threat/train.py`, `artifacts/threat_loto.json` |
 | Component attribution: micro dwell controller +7–9 points on periodic scenarios; learned prior +14 points on easy; information gain no benefit; 5 further ideas measured and rejected | ablations and variant sweeps on disjoint tuning scenarios | `experiments/compare_variants.py`, `PROGRESS.md` |
 

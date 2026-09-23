@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { PolicyRun, Scenario } from "@/lib/api";
+import { policyLabel, type PolicyRun, type Scenario } from "@/lib/api";
 
 const PAD = { left: 44, right: 12, top: 8, bottom: 24 };
 const FMAX = 18_000;
@@ -60,7 +60,9 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     ctx.fillStyle = c.surface; ctx.fillRect(0, 0, width, height);
 
     // recessive grid: every 3 GHz, every 10 s
-    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.fillStyle = c.muted; ctx.font = "11px system-ui";
+    ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.fillStyle = c.muted;
+    const mono = cssVar(el, "--font-mono") || "ui-monospace, Cascadia Mono, Consolas, monospace";
+    ctx.font = `11px ${mono}`;
     ctx.textAlign = "right"; ctx.textBaseline = "middle";
     for (let f = 0; f <= FMAX; f += 3000) {
       const y = Math.round(yOf(f)) + 0.5;
@@ -131,7 +133,7 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     <div ref={wrap} style={{ position: "relative" }}>
       <canvas ref={canvas} style={{ width, height, display: "block", borderRadius: 8 }}
         onMouseMove={onMove} onMouseLeave={() => setHover(null)}
-        role="img" aria-label={`Spectrum-time view of ${run.policy} dwells and intercepts`} />
+        role="img" aria-label={`Spectrum-time view of ${policyLabel(run.policy)} dwells and intercepts`} />
       {hover && (
         <div className="tooltip" style={{ left: Math.min(hover.x + 12, width - 260), top: hover.y + 12 }}>
           <div className="t-head">{hover.lines[0]}</div>
