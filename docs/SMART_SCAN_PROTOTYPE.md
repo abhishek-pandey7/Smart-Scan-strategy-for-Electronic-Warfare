@@ -1,14 +1,14 @@
-# PRIMES Prototype — Demo Scope
+# Smart Scan Prototype — Demo Scope
 
-The smallest system that demonstrates the PRIMES idea end-to-end. The full design is in [`PRIMES_FULL_ARCHITECTURE.md`](PRIMES_FULL_ARCHITECTURE.md).
+The smallest system that demonstrates the Smart Scan idea end-to-end. The full design is in [`SMART_SCAN_FULL_ARCHITECTURE.md`](SMART_SCAN_FULL_ARCHITECTURE.md).
 
 ## Demo story (what the jury sees)
 
-> **An open-loop sweep catches only ~6 % of narrow main-beam radar flashes (measured on real Turing scenarios) and can be locked out entirely. PRIMES learns each emitter's scan timing from its first few hits and misses, then catches far more flashes, finds pop-up emitters faster, and breaks lock-out, on simulated scenarios and on real Turing dataset scenarios.**
+> **An open-loop sweep catches only ~6 % of narrow main-beam radar flashes (measured on real Turing scenarios) and can be locked out entirely. Smart Scan learns each emitter's scan timing from its first few hits and misses, then catches far more flashes, finds pop-up emitters faster, and breaks lock-out, on simulated scenarios and on real Turing dataset scenarios.**
 
 Side-by-side, same scenario, same truth:
 
-| | Raster (open-loop) | PRIMES-lite |
+| | Raster (open-loop) | Smart Scan |
 |---|---|---|
 | Where it looks | fixed 2.15 s sweep | predicted flashes + search |
 | Lock-out scenario | never intercepts emitter | intercepts within seconds |
@@ -24,7 +24,7 @@ Side-by-side, same scenario, same truth:
 | Turing receiver replica: 36 centres, ±500 MHz, exact 2.15 s raster schedule | Wideband cueing receiver, multi-receiver |
 | **Ideal association:** detected pulses carry emitter IDs (upstream deinterleaver assumed) | PDW-noise association / DBSCAN / learned embeddings |
 | **Learned priors** from 2,500 Turing training scenarios (HF API) | Empirical-Bayes refits from field logs |
-| PRIMES-lite: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
+| Smart Scan: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
 | Baselines: raster, random, greedy bandit, oracle; **Double-DQN comparator** (SB3) | Farey sweep, residual RL + shield |
 | Core metrics, 10 seeds, bootstrap CIs; ablations (flat prior, no information gain) | Stratified statistics, 30+ seeds, per-track association ablation |
 | Replay on 11 Turing `val_stare` scenarios | Full validation/test sweep, scan-mode cross-validation |
@@ -45,9 +45,9 @@ flowchart LR
         RND["Random"]
         GRD["Greedy"]
         ORA["Oracle"]
-        PRM["PRIMES-lite"]
+        PRM["Smart Scan"]
     end
-    subgraph PRIMES["PRIMES-lite internals"]
+    subgraph SSCAN["Smart Scan internals"]
         PRI["Learned priors<br/>(22 discrete periods)"] --> TRK
         TRK["Periodic + on/off track models"] --> IDX["Rate index + IG"]
         UND["Undiscovered-cell belief<br/>learned visibility κ"] --> IDX
@@ -56,7 +56,7 @@ flowchart LR
     DQN["Double-DQN"]
     RX -- "look result<br/>(pulses by emitter)" --> POL
     POL -- "action<br/>(centre, dwell)" --> RX
-    PRM --- PRIMES
+    PRM --- SSCAN
     RX --> LOG["Trace"] --> MET["Metrics"] --> API["FastAPI"] --> UI["Next.js demo"]
 ```
 
@@ -120,7 +120,7 @@ class Policy(Protocol):
 | `Greedy` | centre with the most hits so far (with small ε exploration), 50 ms dwell |
 | `Oracle` | reads truth: dwells on the next flash not yet intercepted (upper bound) |
 
-### 5. PRIMES-lite (`primes/policies/primes_lite.py`)
+### 5. Smart Scan (`primes/policies/primes_lite.py`)
 
 **Track model (per emitter ID):**
 - **Flash times:** hits give flash times `f₁, f₂, …` (first received pulse, or midpoint when both edges are inside the dwell), plus observed flash width.
@@ -179,7 +179,7 @@ Reported as mean ± 95 % bootstrap CI over **10 seeds**.
 
 **Robustness result** (1,008 runs, all 36 scenarios pooled):
 
-| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+| Condition | Raster | Greedy | **Smart Scan** (95 % CI) | Oracle | Smart Scan / oracle | Smart Scan on real scenarios |
 |---|---|---|---|---|---|---|
 | nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
 | P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
@@ -201,13 +201,13 @@ Reported as mean ± 95 % bootstrap CI over **10 seeds**.
 
 **FastAPI:** `GET /api/catalog` (scenarios, policies), `POST /api/runs` (replay the requested policies on identical truth, cache to disk), `GET /api/runs/{id}`, `GET /api/benchmark`.
 
-**Next.js — Mission replay page:**
-1. **Controls:** scenario, seed, scheduler A vs B, detection probability; shareable auto-run links (`?scenario=lockout&a=raster&b=primes&autorun=1`).
-2. **Stat tiles:** flashes intercepted, emitters discovered, mean time to first intercept, next-flash predictions correct, for both schedulers.
-3. **Spectrum-time canvas per scheduler:** x = time, y = frequency. Truth flashes as grey ticks, receiver dwells as shaded bands, intercepts as dots; hover shows each look.
-4. **Timelines:** flashes intercepted and emitters discovered over time, with crosshair tooltips.
-5. **"Why PRIMES looked there":** the decision at the playback cursor with its exploit / discovery / information-gain terms and the tracked emitter's predicted next flash.
-6. **"What PRIMES has learned":** estimated vs true period per emitter, updating as flashes are caught.
+**Next.js — Mission page (`/mission`):**
+1. **Controls:** scenario picker (six cards); one "Run all receivers" action. Lineup: Smart Scan, Double-DQN, Greedy bandit, Raster, Random, plus Oracle as a dashed upper-bound reference.
+2. **Live leaderboard:** flashes caught and radars found, re-ranked at the playback cursor.
+3. **Spectrum-time small multiples:** one canvas per receiver, synced to the same cursor (x = time, y = frequency; truth ticks, dwells, intercepts).
+4. **Cumulative chart and results:** flashes caught over time for every line (Oracle dashed); winner badges, metric bars, ranked scorecard.
+5. **Smart Scan decision strip:** mode, frequency, dwell, and score breakdown at the cursor (links to "How it decides").
+6. **Learned tracks:** estimated vs true period (or intermittent) per emitter in the Smart Scan lane.
 
 **Benchmark page:** per-scenario interval plots (mean, 95 % bootstrap CI) for every scheduler and metric, plus a table.
 
@@ -243,16 +243,16 @@ scripts/inspect_turing_dataset.py
 | 1 | `types.py`, scenario + receiver models, pulse truth | raster on `lockout` never intercepts the exact-lock-out emitter |
 | 2 | replay + metrics + raster / random / oracle | deterministic replay; oracle ≥ every policy |
 | 3 | track model | recovers true `T` within 1 % after ≤ 3 flashes on `easy` |
-| 4 | undiscovered belief + index + dither → PRIMES-lite | beats raster and greedy on interception ratio (`easy`, `dense`) and breaks `lockout` |
+| 4 | undiscovered belief + index + dither → Smart Scan | beats raster and greedy on interception ratio (`easy`, `dense`) and breaks `lockout` |
 | 5 | `popup` + Turing replay on 10 files | lower new-emitter latency; results on real scenarios |
 | 6 | FastAPI + Next.js demo | side-by-side playback of all scenarios |
 | 7 | Double-DQN comparator + multi-seed benchmark | fair ML rival; confidence intervals |
 
 ## Acceptance criteria for the demo
 
-- **Lock-out:** on `lockout`, raster never intercepts the exact-lock-out emitter in 30 s, and PRIMES does.
-- **Interception ratio:** PRIMES-lite beats raster, random and greedy on `easy`, `dense` and the Turing scenarios, with non-overlapping CIs.
-- **Prediction:** correct-prediction rate and intercept-time error are reported for PRIMES tracks.
+- **Lock-out:** on `lockout`, raster never intercepts the exact-lock-out emitter in 30 s, and Smart Scan does.
+- **Interception ratio:** Smart Scan beats raster, random and greedy on `easy`, `dense` and the Turing scenarios, with non-overlapping CIs.
+- **Prediction:** correct-prediction rate and intercept-time error are reported for Smart Scan tracks.
 - **Demo:** every number in the UI comes from replayed runs, and nothing is hard-coded.
 
 ## Run

@@ -1,235 +1,180 @@
-"use client";
+import Link from "next/link";
+import { Badge, Card, SectionHeader } from "@/components/ui";
+import { FAMILY_LABEL, LINEUP, isReference, policyBlurb, policyColor, policyFamily, policyLabel } from "@/lib/api";
 
-import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
-import LineChart from "@/components/LineChart";
-import SpectrumCanvas from "@/components/SpectrumCanvas";
-import { DecisionPanel, TrackTable } from "@/components/DecisionPanel";
-import HeadToHead from "@/components/HeadToHead";
-import ScenarioBrief from "@/components/ScenarioBrief";
-import { briefing } from "@/lib/scenarios";
-import {
-  type Catalog, type RunPayload, createRun, getCatalog, num, pct, policyColor, policyLabel, POLICY_SLOT,
-} from "@/lib/api";
+const T = 20, FLASH = 0.25, BANDS = 4;
+const RADARS = [
+  { band: 0, period: 3.0, phase: 0.4 },
+  { band: 1, period: 4.0, phase: 2.3 },
+  { band: 2, period: 2.5, phase: 2.0 },
+  { band: 3, period: 5.0, phase: 0.7 },
+];
+type Flash = { band: number; s: number };
+type Look = { band: number; t0: number; t1: number; search?: boolean };
 
-const SPEEDS = [1, 4, 10];
+const FLASHES: Flash[] = RADARS.flatMap((r) =>
+  Array.from({ length: Math.ceil((T - r.phase) / r.period) }, (_, k) => ({ band: r.band, s: r.phase + k * r.period })),
+).sort((a, b) => a.s - b.s);
 
-export default function ReplayPage() {
+const RASTER: Look[] = Array.from({ length: T }, (_, k) => ({ band: k % BANDS, t0: k, t1: k + 1 }));
+
+/** Search until each radar is heard once, then dwell on predicted flashes; one band at a time, so overlaps lose. */
+const SMART: Look[] = (() => {
+  const search: Look[] = [[0, 0.2], [1, 0.8], [2, 1.3], [3, 1.8], [1, 2.2], [2, 2.7], [3, 3.8], [2, 4.3], [3, 5.0], [3, 5.5]]
+    .map(([band, t0]) => ({ band, t0, t1: t0 + 0.5, search: true }));
+  const found = new Map<number, number>();
+  for (const f of FLASHES) {
+    if (found.has(f.band)) continue;
+    if (search.some((l) => l.band === f.band && f.s < l.t1 && f.s + FLASH > l.t0)) found.set(f.band, f.s);
+  }
+  const track: Look[] = [];
+  let busy = 0;
+  for (const f of FLASHES) {
+    const at = found.get(f.band), t0 = f.s - 0.05, t1 = f.s + 0.3;
+    if (at === undefined || f.s <= at || t0 < busy || search.some((l) => t0 < l.t1 && t1 > l.t0)) continue;
+    track.push({ band: f.band, t0, t1 });
+    busy = t1;
+  }
+  return [...search, ...track];
+})();
+
+const caught = (looks: Look[]) => FLASHES.filter((f) => looks.some((l) => l.band === f.band && f.s >= l.t0 && f.s + FLASH <= l.t1 + 1e-9));
+
+function Panel({ y, name, color, looks }: { y: number; name: string; color: string; looks: Look[] }) {
+  const W = 600, L = 132, R = 12, rowH = 26, H = rowH * BANDS;
+  const x = (t: number) => L + (t / T) * (W - L - R);
+  const ry = (b: number) => y + b * rowH;
+  const hits = caught(looks);
+  const hit = new Set(hits);
   return (
-    <Suspense fallback={<h1>Mission replay</h1>}>
-      <Replay />
-    </Suspense>
+    <g>
+      <text x={0} y={y + 16} fontSize={15} fontWeight={650} fill="var(--text-primary)">{name}</text>
+      <text x={0} y={y + 40} fontSize={26} fontWeight={650} fill={color} fontFamily="var(--font-num)">{hits.length}</text>
+      <text x={0} y={y + 58} fontSize={12} fill="var(--text-muted)">of {FLASHES.length} flashes caught</text>
+      <rect x={L} y={y} width={W - L - R} height={H} rx={6} fill="var(--surface-2)" />
+      {Array.from({ length: BANDS - 1 }, (_, b) => (
+        <line key={b} x1={L} x2={W - R} y1={ry(b + 1)} y2={ry(b + 1)} stroke="var(--surface-1)" strokeWidth={2} />
+      ))}
+      {looks.map((l, i) => (
+        <rect key={i} x={x(l.t0)} y={ry(l.band) + 3} width={x(l.t1) - x(l.t0)} height={rowH - 6} rx={3}
+          fill={color} opacity={l.search ? 0.16 : 0.3} />
+      ))}
+      {FLASHES.map((f, i) => (
+        <rect key={i} x={x(f.s)} y={ry(f.band) + 7} width={Math.max(3, x(f.s + FLASH) - x(f.s))} height={rowH - 14} rx={1.5}
+          fill={hit.has(f) ? color : "var(--truth)"} />
+      ))}
+    </g>
   );
 }
 
-function Replay() {
-  // Shareable demo links: /?scenario=lockout&seed=0&a=raster&b=primes&autorun=1&t=60
-  const params = useSearchParams();
-  const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [scenario, setScenario] = useState(params.get("scenario") ?? "lockout");
-  const [seed, setSeed] = useState(Number(params.get("seed") ?? 0));
-  const [policyA, setPolicyA] = useState(params.get("a") ?? "raster");
-  const [policyB, setPolicyB] = useState(params.get("b") ?? "primes");
-  const [pD, setPD] = useState(Number(params.get("pd") ?? 1));
-  const [data, setData] = useState<RunPayload | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [cursor, setCursor] = useState(0);
-  const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState(4);
-  const raf = useRef<number | null>(null);
-
-  useEffect(() => { getCatalog().then(setCatalog).catch((e) => setError(String(e))); }, []);
-
-  const execute = useCallback(async (req: { scenario: string; seed: number; a: string; b: string; pD: number }, startAt?: number) => {
-    setLoading(true); setError(null); setPlaying(false);
-    try {
-      const policies = Array.from(new Set([req.a, req.b]));
-      const payload = await createRun({ scenario: req.scenario, seed: req.seed, policies, p_d: req.pD });
-      setData(payload);
-      setCursor(startAt ?? 0);
-      setPlaying(startAt === undefined);
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const run = () => execute({ scenario, seed, a: policyA, b: policyB, pD });
-
-  const autorun = params.has("autorun");
-  const startAt = params.has("t") ? Number(params.get("t")) : undefined;
-  const autoStarted = useRef(false);
-  useEffect(() => {
-    if (!catalog || !autorun || autoStarted.current) return;
-    autoStarted.current = true;
-    void execute({ scenario, seed, a: policyA, b: policyB, pD }, startAt);
-  }, [catalog, autorun, startAt, execute]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const horizon = data?.scenario.horizon_s ?? 60;
-  const cursorRef = useRef(0);
-  useEffect(() => { cursorRef.current = cursor; }, [cursor]);
-  useEffect(() => {
-    if (!playing) return;
-    let last = performance.now();
-    const tick = (now: number) => {
-      const next = Math.min(horizon, cursorRef.current + ((now - last) / 1000) * speed);
-      last = now;
-      cursorRef.current = next;
-      setCursor(next);
-      if (next >= horizon) { setPlaying(false); return; }
-      raf.current = requestAnimationFrame(tick);
-    };
-    raf.current = requestAnimationFrame(tick);
-    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [playing, speed, horizon]);
-
-  const shown = useMemo(() => (data ? Object.keys(data.runs) : []), [data]);
-  const primesRun = data?.runs.primes;
-
-  const series = (key: "intercepted" | "discovered") =>
-    shown.map((p) => ({ key: p, label: policyLabel(p), color: policyColor(p), x: data!.runs[p].timeline.t, y: data!.runs[p].timeline[key] }));
-
-  const policyOptions = catalog?.policies ?? [];
-
+function HeroArt() {
   return (
-    <>
-      <h1>Mission replay</h1>
-      <p className="sub">
-        Two receivers face exactly the same radars. One scans the old way, one uses PRIMES. Watch which one catches more.
-      </p>
+    <div className="hero-art">
+      <svg viewBox="0 0 600 262" role="img" aria-label="Illustration: the same radar flashes seen by a fixed sweep and by Smart Scan">
+        <Panel y={0} name="Fixed sweep" color={policyColor("raster")} looks={RASTER} />
+        <Panel y={128} name="Smart Scan" color={policyColor("primes")} looks={SMART} />
+        <text x={132} y={254} fontSize={12} fill="var(--text-muted)">time</text>
+        <text x={588} y={254} fontSize={12} fill="var(--text-muted)" textAnchor="end">
+          4 radars on 4 frequency slices · shaded = where the receiver listened
+        </text>
+      </svg>
+    </div>
+  );
+}
 
-      <div className="card controls">
-        <div className="field">
-          <label htmlFor="scn">Scenario</label>
-          <select id="scn" value={scenario} onChange={(e) => setScenario(e.target.value)}>
-            {(catalog?.scenarios ?? [{ id: scenario, description: "" }]).map((s) => (
-              <option key={s.id} value={s.id}>{briefing(s.id).short}</option>
-            ))}
-          </select>
-        </div>
-        <div className="field">
-          <label htmlFor="seed">Variant</label>
-          <input id="seed" type="number" min={0} max={999} value={seed} disabled={scenario.startsWith("turing:")}
-            onChange={(e) => setSeed(Math.max(0, Number(e.target.value)))} style={{ minWidth: 80, width: 80 }} />
-        </div>
-        {[["Receiver A", policyA, setPolicyA], ["Receiver B", policyB, setPolicyB]].map(([label, value, set]) => (
-          <div className="field" key={label as string}>
-            <label>{label as string}</label>
-            <select value={value as string} onChange={(e) => (set as (v: string) => void)(e.target.value)}>
-              {policyOptions.map((p) => <option key={p.id} value={p.id}>{policyLabel(p.id)}</option>)}
-            </select>
-          </div>
+const PROBLEMS = [
+  {
+    title: "Radars flash briefly",
+    body: "A rotating radar points at you for a few milliseconds every few seconds. Each flash is the only chance to hear it.",
+    art: (
+      <svg viewBox="0 0 240 72" aria-hidden>
+        <line x1={0} x2={240} y1={56} y2={56} stroke="var(--axis)" strokeWidth={2} />
+        {[22, 86, 150, 214].map((x) => <rect key={x} x={x} y={12} width={6} height={44} rx={2} fill="var(--accent)" />)}
+      </svg>
+    ),
+  },
+  {
+    title: "The receiver hears one slice at a time",
+    body: "The band is wide but the receiver tunes to a narrow slice. Every look is a bet on where the next flash will be.",
+    art: (
+      <svg viewBox="0 0 240 72" aria-hidden>
+        {[0, 1, 2, 3, 4].map((i) => (
+          <rect key={i} x={0} y={2 + i * 14} width={240} height={11} rx={3} fill={i === 2 ? "var(--accent)" : "var(--surface-3)"} />
         ))}
-        <div className="field">
-          <label htmlFor="pd">Detection reliability</label>
-          <select id="pd" value={pD} onChange={(e) => setPD(Number(e.target.value))}>
-            {[1, 0.9, 0.7].map((v) => <option key={v} value={v}>{v}</option>)}
-          </select>
+      </svg>
+    ),
+  },
+  {
+    title: "A fixed sweep gets locked out",
+    body: "A sweep repeats on a timer. A radar whose rhythm lines up with it is always flashing somewhere else, and is never seen.",
+    art: (
+      <svg viewBox="0 0 240 72" aria-hidden>
+        {[0, 1, 2, 3, 4, 5].map((i) => (
+          <rect key={i} x={i * 40} y={4 + (i % 3) * 22} width={38} height={20} rx={3} fill="var(--series-raster)" opacity={0.3} />
+        ))}
+        {[18, 138].map((x) => <rect key={x} x={x} y={52} width={5} height={16} rx={1.5} fill="var(--truth)" />)}
+      </svg>
+    ),
+  },
+];
+
+export default function OverviewPage() {
+  return (
+    <div className="stack-lg">
+      <section className="hero">
+        <div>
+          <div className="eyebrow">Electronic support · spectrum scheduling</div>
+          <h1 className="display">A receiver that learns <span className="accent-text">when and where</span> to listen.</h1>
+          <p className="lede">
+            Radars show up for milliseconds at a time, and a receiver can only tune to one slice of spectrum at once.
+            Smart Scan learns each radar&apos;s rhythm from what it hears, predicts the next flash, and spends its
+            listening time where it will catch the most.
+          </p>
+          <div className="hstack">
+            <Link href="/mission" className="btn btn-lg">Run the mission</Link>
+            <Link href="/how-it-decides" className="btn btn-lg secondary">How it decides</Link>
+          </div>
         </div>
-        <button className="btn" onClick={run} disabled={loading || !catalog}>
-          {loading ? "Running replay…" : "Run replay"}
-        </button>
-      </div>
+        <HeroArt />
+      </section>
 
-      <ScenarioBrief id={scenario} scenario={data && data.request.scenario === scenario ? data.scenario : undefined} />
-
-      {error && <p className="error">{error}</p>}
-      {loading && (
-        <p className="notice">
-          Replaying both schedulers against the hidden truth. Large Turing scenarios take up to a minute the first time; results are cached.
-        </p>
-      )}
-
-      {data && (
-        <div className="stack">
-          <div className="explainer">
-            <div><strong>The radars</strong><span className="muted">Rotating radars only point at us for a brief &ldquo;flash&rdquo; every few seconds. Each flash is a chance to detect them.</span></div>
-            <div><strong>The receiver</strong><span className="muted">It can listen to only one small slice of the spectrum at a time, so it must choose where and when to listen.</span></div>
-            <div><strong>The score</strong><span className="muted">A flash counts only if the receiver was listening on the right frequency at that moment. More caught = better awareness.</span></div>
-          </div>
-
-          <HeadToHead data={data} a={policyA} b={policyB === policyA ? policyA : policyB} cursor={cursor} />
-
-          <div className="card playbar">
-            <button className="btn ghost" onClick={() => { if (cursor >= horizon) setCursor(0); setPlaying(!playing); }}>
-              {playing ? "Pause" : cursor >= horizon ? "Replay" : "Play"}
-            </button>
-            <input type="range" min={0} max={horizon} step={0.05} value={cursor} aria-label="Playback time"
-              onChange={(e) => { setPlaying(false); setCursor(Number(e.target.value)); }} />
-            <span style={{ fontVariantNumeric: "tabular-nums", minWidth: 70 }}>{cursor.toFixed(1)} / {horizon} s</span>
-            <select value={speed} onChange={(e) => setSpeed(Number(e.target.value))} aria-label="Playback speed">
-              {SPEEDS.map((s) => <option key={s} value={s}>{s}×</option>)}
-            </select>
-          </div>
-
-          <h2 style={{ marginTop: 8 }}>Final results for the whole run</h2>
-          <div className="tiles">
-            {[
-              { label: "Radar flashes caught", fmt: (p: string) => pct(data.runs[p].metrics.interception_ratio) },
-              { label: "Radars found", fmt: (p: string) => `${data.runs[p].metrics.emitters_discovered} of ${data.runs[p].metrics.emitters}` },
-              { label: "Average time to first catch", fmt: (p: string) => num(data.runs[p].metrics.ttfi_mean_s, 1, " s") },
-              { label: "Next flash predicted correctly", fmt: (p: string) => num(data.runs[p].metrics.prediction_correct_pct, 0, "%") },
-            ].map((tile) => (
-              <div className="tile" key={tile.label}>
-                <div className="label">{tile.label}</div>
-                <div className="rows">
-                  {shown.map((p) => (
-                    <div className="row" key={p}>
-                      <span className="key"><span className="swatch" style={{ background: policyColor(p) }} />{policyLabel(p)}</span>
-                      <span className="value">{tile.fmt(p)}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {shown.map((p) => {
-            const tl = data.runs[p].timeline;
-            const i = Math.max(0, Math.min(tl.t.length - 1, Math.floor(cursor / (tl.t[1] - tl.t[0] || 0.25))));
-            return (
-            <div className="card" key={p}>
-              <h2>
-                <span className="swatch" style={{ background: policyColor(p), marginRight: 8 }} />{policyLabel(p)}
-                <span className="live-count">caught {tl.intercepted[i]} flashes · found {tl.discovered[i]} radars</span>
-              </h2>
-              <p className="sub" style={{ marginBottom: 8 }}>
-                Coloured bands = where this receiver listened · grey ticks = radar flashes that happened · dots = flashes it caught
-              </p>
-              <SpectrumCanvas scenario={data.scenario} run={data.runs[p]} cursor={cursor} colorVar={`--series-${POLICY_SLOT[p] ?? 7}`} />
-            </div>
-            );
-          })}
-
-          <div className="grid-2">
-            <div className="card">
-              <h2>Radar flashes caught over time</h2>
-              <LineChart series={series("intercepted")} horizon={horizon} cursor={cursor} format={(v) => v.toFixed(0)} />
-            </div>
-            <div className="card">
-              <h2>Radars found over time</h2>
-              <LineChart series={series("discovered")} horizon={horizon} cursor={cursor} format={(v) => v.toFixed(0)} />
-            </div>
-          </div>
-
-          {primesRun && (
-            <div className="grid-2">
-              <div className="card">
-                <h2>Why PRIMES looked there</h2>
-                <p className="sub" style={{ marginBottom: 10 }}>PRIMES explains every choice: what it expected to catch there, and why it beat the alternatives.</p>
-                <DecisionPanel run={primesRun} cursor={cursor} />
-              </div>
-              <div className="card">
-                <h2>What PRIMES has learned</h2>
-                <p className="sub" style={{ marginBottom: 10 }}>Radars PRIMES has worked out on its own, from what it caught and missed. No prior intelligence.</p>
-                <TrackTable run={primesRun} emitters={data.scenario.emitters} cursor={cursor} />
-              </div>
-            </div>
-          )}
+      <section>
+        <SectionHeader eyebrow="The problem" title="Why scanning is hard" />
+        <div className="grid-3">
+          {PROBLEMS.map((p, i) => (
+            <Card key={p.title} pad="lg" className="problem">
+              <span className="problem-num">0{i + 1}</span>
+              <div className="problem-art">{p.art}</div>
+              <h3>{p.title}</h3>
+              <p>{p.body}</p>
+            </Card>
+          ))}
         </div>
-      )}
-    </>
+      </section>
+
+      <section>
+        <SectionHeader eyebrow="The lineup" title="Six receivers, same radars"
+          lede="Every mission runs all of them against identical ground truth, so the only difference is how each one decides where to listen." />
+        <div className="grid-6">
+          {LINEUP.map((p) => (
+            <Card key={p} className={p === "primes" ? "algo algo-hero" : isReference(p) ? "algo algo-ref" : "algo"} style={{ ["--algo" as string]: policyColor(p) }}>
+              <Badge tone={p === "primes" ? "accent" : isReference(p) ? "outline" : "neutral"} dot={policyColor(p)}>
+                {FAMILY_LABEL[policyFamily(p)]}
+              </Badge>
+              <h3>{policyLabel(p)}</h3>
+              <p>{policyBlurb(p)}</p>
+            </Card>
+          ))}
+        </div>
+      </section>
+
+      <section className="cta">
+        <div>
+          <h2>See it on a real mission</h2>
+          <p>Pick a scenario, run every receiver at once, and watch the flashes they catch add up.</p>
+        </div>
+        <Link href="/mission" className="btn btn-lg">Run the mission</Link>
+      </section>
+    </div>
   );
 }

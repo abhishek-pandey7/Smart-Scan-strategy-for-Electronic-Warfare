@@ -1,6 +1,7 @@
 "use client";
 
 import type { Emitter, PolicyRun } from "@/lib/api";
+import { MODE_VERB } from "@/components/explain/modes";
 
 function atOrBefore<T extends { t: number }>(items: T[], t: number): T | undefined {
   let lo = 0, hi = items.length - 1, ans = -1;
@@ -23,7 +24,7 @@ export function DecisionPanel({ run, cursor }: { run: PolicyRun; cursor: number 
   return (
     <div className="stack" style={{ gap: 10 }}>
       <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-        <span className="badge">{ex.mode === "track" ? "Tracking" : "Searching"}</span>
+        <span className="badge">{MODE_VERB[ex.mode]}</span>
         <span>t = {ex.t.toFixed(2)} s</span>
         <span className="muted">·</span>
         <strong>{(ex.centre_mhz / 1000).toFixed(2)} GHz</strong>

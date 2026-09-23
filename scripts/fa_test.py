@@ -1,4 +1,4 @@
-"""Quick false-alarm sanity check for PRIMES: python -m scripts.fa_test"""
+"""Quick false-alarm sanity check for Smart Scan: python -m scripts.fa_test"""
 from primes.eval.metrics import compute_metrics
 from primes.eval.replay import replay
 from primes.eval.runner import load_scenario, make_policy, priors

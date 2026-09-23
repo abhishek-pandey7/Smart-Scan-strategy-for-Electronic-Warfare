@@ -2,7 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-export type Series = { key: string; label: string; color: string; x: number[]; y: number[] };
+export type Series = {
+  key: string; label: string; color: string; x: number[]; y: number[];
+  /** SVG stroke-dasharray; use policyDash(id) for the Oracle reference. */
+  dash?: string;
+};
 
 const PAD = { left: 40, right: 16, top: 10, bottom: 24 };
 
@@ -60,7 +64,16 @@ export default function LineChart({ series, horizon, cursor, height = 200, forma
       {series.length > 1 && (
         <div className="legend">
           {series.map((s) => (
-            <span key={s.key} className="key"><span className="swatch" style={{ background: s.color }} />{s.label}</span>
+            <span key={s.key} className="key">
+              {s.dash ? (
+                <svg width={22} height={10} aria-hidden>
+                  <line x1={1} x2={21} y1={5} y2={5} stroke={s.color} strokeWidth={3} strokeLinecap="round" strokeDasharray={s.dash} />
+                </svg>
+              ) : (
+                <span className="swatch" style={{ background: s.color }} />
+              )}
+              {s.label}
+            </span>
           ))}
         </div>
       )}
@@ -75,14 +88,16 @@ export default function LineChart({ series, horizon, cursor, height = 200, forma
           <g key={v}>
             <line x1={PAD.left} x2={width - PAD.right} y1={yOf(v)} y2={yOf(v)} stroke="var(--grid)" strokeWidth={1} />
             <text x={PAD.left - 6} y={yOf(v)} textAnchor="end" dominantBaseline="middle" fontSize={11} fill="var(--text-muted)"
-              style={{ fontVariantNumeric: "tabular-nums" }}>{format(v)}</text>
+              fontFamily="var(--font-num)" style={{ fontVariantNumeric: "tabular-nums" }}>{format(v)}</text>
           </g>
         ))}
         {Array.from({ length: Math.floor(horizon / step) + 1 }, (_, i) => i * step).map((tk) => (
-          <text key={tk} x={xOf(tk)} y={height - 6} textAnchor="middle" fontSize={11} fill="var(--text-muted)">{tk}s</text>
+          <text key={tk} x={xOf(tk)} y={height - 6} textAnchor="middle" fontSize={11} fill="var(--text-muted)"
+            fontFamily="var(--font-num)">{tk}s</text>
         ))}
         {series.map((s) => (
-          <path key={s.key} d={path(s)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+          <path key={s.key} d={path(s)} fill="none" stroke={s.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round"
+            strokeDasharray={s.dash} />
         ))}
         {series.map((s) => {
           const tEnd = Math.min(cursor, horizon);
