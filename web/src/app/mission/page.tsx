@@ -1,30 +1,57 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Leaderboard from "@/components/Leaderboard";
 import LineChart, { type Series } from "@/components/LineChart";
 import ScenarioBrief from "@/components/ScenarioBrief";
 import ScenarioPicker from "@/components/ScenarioPicker";
 import SpectrumGrid from "@/components/SpectrumGrid";
 import { MetricBars, Scorecard, WinnerBadges } from "@/components/results";
-import { Card, PlayBar, SectionHeader } from "@/components/ui";
+import { Card, SectionHeader } from "@/components/ui";
 import {
-  createRun, getCatalog, itemAtCursor, policyColor, policyDash, policyLabel,
+  atCursor, createRun, getCatalog, isReference, itemAtCursor, policyColor, policyDash, policyLabel,
   type Catalog, type Explanation, type RunPayload,
 } from "@/lib/api";
-import { usePlayback } from "@/lib/hooks";
+import { SPEEDS, usePlayback, type Playback } from "@/lib/hooks";
+import { briefing } from "@/lib/scenarios";
 import { MODE_VERB } from "@/components/explain/modes";
+import styles from "./mission.module.css";
+
+/** Spectrum boxes 1-5, in this order; box 6 is the cumulative chart. */
+const SPECTRUM_ORDER = ["primes", "dqn", "greedy", "raster", "random"] as const;
 
 export default function MissionPage() {
   const [catalog, setCatalog] = useState<Catalog | null>(null);
-  const [scenario, setScenario] = useState("lockout");
+  const [scenario, setScenario] = useState<string | null>(null);
+  const [pending, setPending] = useState<string | null>(null);
   const [data, setData] = useState<RunPayload | null>(null);
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const pickerRef = useRef<HTMLElement>(null);
+  const simRef = useRef<HTMLElement>(null);
+  const request = useRef(0);
+  const scrollOnLoad = useRef(false);
+  const busy = pending !== null;
 
   useEffect(() => {
     getCatalog().then(setCatalog).catch((e) => setError(String(e)));
+  }, []);
+
+  // The simulator is sized to the viewport minus the sticky site header, whatever its current height.
+  useEffect(() => {
+    const root = rootRef.current;
+    const header = document.querySelector<HTMLElement>("body > header, header.topbar");
+    if (!root || !header) return;
+    const update = () => {
+      const pos = getComputedStyle(header).position;
+      const h = pos === "sticky" || pos === "fixed" ? header.getBoundingClientRect().height : 0;
+      root.style.setProperty("--mission-header-h", `${Math.ceil(h)}px`);
+    };
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(header);
+    return () => ro.disconnect();
   }, []);
 
   const turingId = useMemo(
@@ -34,119 +61,160 @@ export default function MissionPage() {
 
   const horizon = data?.scenario.horizon_s ?? 60;
   const pb = usePlayback(horizon);
+  const { restart } = pb;
 
+  const scrollToSim = useCallback(() => {
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    simRef.current?.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  }, []);
+
+  const runId = data?.id;
   useEffect(() => {
-    if (!data) return;
-    pb.setCursor(0);
-    pb.setPlaying(true);
-    // restart when a new run id arrives
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [data?.id]);
+    if (!runId) return;
+    restart();
+    if (!scrollOnLoad.current) return;
+    scrollOnLoad.current = false;
+    const raf = requestAnimationFrame(scrollToSim);
+    return () => cancelAnimationFrame(raf);
+  }, [runId, restart, scrollToSim]);
 
-  const runAll = useCallback(async () => {
-    setBusy(true);
+  const pick = useCallback(async (id: string) => {
+    setScenario(id);
     setError(null);
+    if (data?.request.scenario === id) { scrollToSim(); return; }
+    const req = ++request.current;
+    setPending(id);
     try {
-      const payload = await createRun({ scenario });
+      const payload = await createRun({ scenario: id });
+      if (req !== request.current) return;
+      scrollOnLoad.current = true;
       setData(payload);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      if (req === request.current) setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false);
+      if (req === request.current) setPending(null);
     }
-  }, [scenario]);
+  }, [data, scrollToSim]);
 
   const policies = useMemo(() => data?.request.policies.filter((p) => data.runs[p]) ?? [], [data]);
+  const spectrumIds = useMemo(() => SPECTRUM_ORDER.filter((p) => data?.runs[p]), [data]);
+  const chartIds = useMemo(() => {
+    const rest = policies.filter((p) => !(SPECTRUM_ORDER as readonly string[]).includes(p));
+    return [...spectrumIds, ...rest.filter((p) => !isReference(p)), ...rest.filter(isReference)];
+  }, [policies, spectrumIds]);
 
   const series: Series[] = useMemo(() => {
     if (!data) return [];
-    return policies.map((p) => {
+    return chartIds.map((p) => {
       const tl = data.runs[p].timeline;
-      return {
-        key: p,
-        label: policyLabel(p),
-        color: policyColor(p),
-        x: tl.t,
-        y: tl.intercepted,
-        dash: policyDash(p),
-      };
+      return { key: p, label: policyLabel(p), color: policyColor(p), x: tl.t, y: tl.intercepted, dash: policyDash(p) };
     });
-  }, [data, policies]);
+  }, [data, chartIds]);
 
   const smartScan = data?.runs.primes;
   const explanation = smartScan ? itemAtCursor(smartScan.explanations, pb.cursor) : undefined;
-  const isTuring = scenario.startsWith("turing:");
+  const isTuring = (pending ?? scenario ?? "").startsWith("turing:");
+  const runScenario = data?.request.scenario;
+  const b = runScenario ? briefing(runScenario) : null;
 
   return (
-    <div className="stack-lg">
+    <div ref={rootRef} className="stack-lg">
       <SectionHeader
         as="h1"
         eyebrow="Mission"
         title="Run every receiver on one scenario"
-        lede="Pick a scenario, run the full lineup against identical ground truth, then scrub the replay to watch flashes accumulate."
+        lede="Pick a scenario and the full lineup runs against identical ground truth. The simulator opens below: scrub, reverse, or speed up the replay to watch flashes accumulate."
       />
 
-      <section className="stack">
+      <section ref={pickerRef} className="stack" style={{ scrollMarginTop: "calc(var(--mission-header-h, 68px) + 16px)" }}>
         <SectionHeader
           eyebrow="Step 1"
           title="Choose a scenario"
-          lede="Five simulated missions plus one real-dataset scenario when the catalog has it."
+          lede="Five simulated missions plus one real-dataset scenario when the catalog has it. Selecting one runs every receiver."
         />
         <ScenarioPicker
-          selected={scenario}
-          onSelect={(id) => { setScenario(id); setData(null); setError(null); }}
+          selected={scenario ?? ""}
+          onSelect={pick}
           turingId={turingId}
-          disabled={busy}
+          disabled={busy || !catalog}
+          pendingId={pending}
         />
-        <ScenarioBrief id={scenario} scenario={data?.request.scenario === scenario ? data.scenario : undefined} />
-        <div className="hstack">
-          <button type="button" className="btn btn-lg" onClick={runAll} disabled={busy || !catalog}>
-            {busy ? "Running…" : "Run all receivers"}
-          </button>
-          <span className="muted small">Seed 0 · perfect detection · lineup from the catalog</span>
-        </div>
+        <span className="muted small">Seed 0 · perfect detection · lineup from the catalog</span>
         {busy && (
           <div className="notice" role="status">
             Computing every receiver on this scenario
             {isTuring ? " (real-dataset runs can take a minute or two on first request; later runs use cache)" : ""}.
-            Stay on this page — results appear when ready.
+            Stay on this page. The simulator opens when results are ready.
           </div>
         )}
         {error && <p className="error notice" role="alert">{error}</p>}
       </section>
 
-      {data && (
+      {data && b && (
         <>
-          <section className="stack">
-            <SectionHeader
-              eyebrow="Step 2"
-              title="Live race"
-              lede="Bars re-rank at the playhead by flashes caught. Found counts sit beside each score."
-            />
-            <PlayBar {...pb.bind} />
-            <Card title="Leaderboard" subtitle={`t = ${pb.cursor.toFixed(1)} s · same radars for every receiver`}>
-              <Leaderboard data={data} cursor={pb.cursor} policies={policies} />
-            </Card>
-          </section>
+          <section ref={simRef} className={styles.sim} aria-label="Simulator">
+            <div className={`${styles.box} ${styles.title}`}>
+              <div className={styles.titleText}>
+                <div className={styles.eyebrow}>{data.request.scenario.startsWith("turing:") ? "Real dataset" : "Simulated scenario"}</div>
+                <h2 className={styles.scenarioName}>{b.title}</h2>
+                <p className={styles.tagline}>
+                  {b.tagline ?? b.tests} · {data.scenario.emitters.length} emitters · seed {data.request.seed}
+                </p>
+              </div>
+              <div className={styles.clock} aria-live="off">
+                <div className={styles.clockNow}>t = {pb.cursor.toFixed(1)} s</div>
+                <div className={styles.clockOf}>of {horizon.toFixed(0)} s mission</div>
+              </div>
+              <button type="button" className={styles.linkBtn}
+                onClick={() => pickerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+                Change scenario ↑
+              </button>
+            </div>
 
-          <section className="stack">
-            <SectionHeader
-              eyebrow="Step 3"
-              title="Where each receiver listened"
-              lede="Small multiples of the spectrum-time view, synced to the same cursor. Oracle is omitted here — it already knows every flash."
-            />
-            <SpectrumGrid data={data} cursor={pb.cursor} policies={policies} />
-          </section>
+            <TimeControls pb={pb} className={`${styles.box} ${styles.controls}`} />
 
-          <section className="stack">
-            <SectionHeader
-              eyebrow="Step 4"
-              title="Cumulative flashes caught"
-              lede="Oracle is dashed — the physical upper bound when the schedule is known in advance."
-            />
-            <Card>
-              <LineChart series={series} horizon={horizon} cursor={pb.cursor} height={240} />
-            </Card>
+            <aside className={`${styles.box} ${styles.board}`} aria-label="Live leaderboard">
+              <div className={styles.boardHead}>
+                <h3>Live leaderboard</h3>
+                <span className="mono muted small">t = {pb.cursor.toFixed(1)} s</span>
+              </div>
+              <p className={styles.boardSub}>Ranked by flashes caught at the playhead. Same radars for every receiver.</p>
+              <Leaderboard data={data} cursor={pb.cursor} policies={policies} compact />
+              <BoardStats data={data} cursor={pb.cursor} />
+              <div className={styles.key}>
+                <span className={styles.keyTitle}>Reading the spectrum views</span>
+                <span className={styles.keyItem}><span className={styles.keyBand} />Shaded band: where the receiver listened</span>
+                <span className={styles.keyItem}><span className={styles.keyTruth} />Grey tick: a radar flash (ground truth)</span>
+                <span className={styles.keyItem}><span className={styles.keyDot} />Dot: a flash the receiver caught</span>
+              </div>
+            </aside>
+
+            <SpectrumGrid data={data} cursor={pb.cursor} policies={spectrumIds} fill
+              className={styles.grid} cellClassName={`${styles.box} ${styles.cell}`}>
+              <div className={`${styles.box} ${styles.cell}`}>
+                <div className={styles.cellHead}>
+                  <strong>Flashes caught</strong>
+                  <span className="muted small">cumulative, Oracle dashed</span>
+                </div>
+                <div className={styles.cellBody}>
+                  <span className={styles.legend} aria-hidden>
+                    {series.map((s) => (
+                      <span key={s.key} className={styles.legendKey}>
+                        {s.dash ? (
+                          <svg width={18} height={8} aria-hidden>
+                            <line x1={1} x2={17} y1={4} y2={4} stroke={s.color} strokeWidth={2.5} strokeLinecap="round" strokeDasharray="4 3" />
+                          </svg>
+                        ) : (
+                          <span className="swatch" style={{ background: s.color, width: 10, height: 10 }} />
+                        )}
+                        {s.label}
+                      </span>
+                    ))}
+                  </span>
+                  <LineChart series={series} horizon={horizon} cursor={pb.cursor} fill legend={false} />
+                </div>
+              </div>
+            </SpectrumGrid>
           </section>
 
           {smartScan && (
@@ -154,16 +222,16 @@ export default function MissionPage() {
               <SectionHeader
                 eyebrow="Smart Scan"
                 title="What it decided just now"
-                lede="Mode, frequency, dwell, and score terms at the playhead."
+                lede="Mode, frequency, dwell, and score terms at the playhead. Synced to the simulator above."
                 actions={
                   <Link href={`/how-it-decides?run=${encodeURIComponent(data.id)}`} className="link-arrow">How it decides →</Link>
                 }
               />
-              <Card className="decision-strip">
+              <Card>
                 {explanation ? (
                   <DecisionStrip ex={explanation} />
                 ) : (
-                  <p className="muted" style={{ margin: 0 }}>No decision yet — press play.</p>
+                  <p className="muted" style={{ margin: 0 }}>No decision yet. Press play.</p>
                 )}
               </Card>
             </section>
@@ -171,7 +239,16 @@ export default function MissionPage() {
 
           <section className="stack">
             <SectionHeader
-              eyebrow="Step 5"
+              eyebrow="Scenario"
+              title="About this scenario"
+              lede="What is in it, what it tests, and what to watch for in the replay."
+            />
+            <ScenarioBrief id={data.request.scenario} scenario={data.scenario} />
+          </section>
+
+          <section className="stack">
+            <SectionHeader
+              eyebrow="Results"
               title="Who wins what"
               lede="Final metrics across the lineup once the mission is complete."
             />
@@ -182,6 +259,93 @@ export default function MissionPage() {
             </div>
           </section>
         </>
+      )}
+    </div>
+  );
+}
+
+function Icon({ d }: { d: string }) {
+  return (
+    <svg width={14} height={14} viewBox="0 0 14 14" aria-hidden>
+      <path d={d} fill="currentColor" />
+    </svg>
+  );
+}
+
+const ICON = {
+  start: "M2 1.5h2v11H2zM12 1.8v10.4a.7.7 0 0 1-1.1.6L4.6 7.6a.7.7 0 0 1 0-1.2l6.3-5.2a.7.7 0 0 1 1.1.6z",
+  end: "M10 1.5h2v11h-2zM2 1.8v10.4a.7.7 0 0 0 1.1.6l6.3-5.2a.7.7 0 0 0 0-1.2L3.1 1.2A.7.7 0 0 0 2 1.8z",
+  forward: "M3 1.5v11a.8.8 0 0 0 1.2.7l9-5.5a.8.8 0 0 0 0-1.4l-9-5.5A.8.8 0 0 0 3 1.5z",
+  reverse: "M11 1.5v11a.8.8 0 0 1-1.2.7l-9-5.5a.8.8 0 0 1 0-1.4l9-5.5A.8.8 0 0 1 11 1.5z",
+  pause: "M2.5 1h3.5v12H2.5zM8 1h3.5v12H8z",
+};
+
+function TimeControls({ pb, className }: { pb: Playback; className?: string }) {
+  const { cursor, horizon, playing, direction, speed } = pb;
+  const fwd = playing && direction > 0;
+  const rev = playing && direction < 0;
+  const progress = horizon ? (100 * Math.min(cursor, horizon)) / horizon : 0;
+  const seek = (t: number) => { pb.setPlaying(false); pb.setCursor(t); };
+  return (
+    <div className={className} role="group" aria-label="Time controls">
+      <div className={styles.controlsRow}>
+        <div className={styles.transport}>
+          <button type="button" className={styles.tbtn} aria-label="Jump to start" title="Jump to start"
+            disabled={cursor <= 0} onClick={() => seek(0)}><Icon d={ICON.start} /></button>
+          <button type="button" className={styles.tbtn} aria-pressed={rev} aria-label={rev ? "Pause" : "Play in reverse"}
+            title={rev ? "Pause" : "Play in reverse"} onClick={() => (rev ? pb.setPlaying(false) : pb.play(-1))}>
+            <Icon d={rev ? ICON.pause : ICON.reverse} />
+          </button>
+          <button type="button" className={styles.tbtn} aria-pressed={fwd} aria-label={fwd ? "Pause" : "Play forward"}
+            title={fwd ? "Pause" : "Play forward"} onClick={() => (fwd ? pb.setPlaying(false) : pb.play(1))}>
+            <Icon d={fwd ? ICON.pause : ICON.forward} />
+          </button>
+          <button type="button" className={styles.tbtn} aria-label="Jump to end" title="Jump to end"
+            disabled={cursor >= horizon} onClick={() => seek(horizon)}><Icon d={ICON.end} /></button>
+        </div>
+        <div className={`segmented ${styles.speeds}`} role="group" aria-label="Playback speed">
+          {SPEEDS.map((s) => (
+            <button type="button" key={s} aria-pressed={s === speed} onClick={() => pb.setSpeed(s)}>{s}x</button>
+          ))}
+        </div>
+      </div>
+      <div className={styles.scrubRow}>
+        <input type="range" min={0} max={horizon} step={0.05} value={Math.min(cursor, horizon)}
+          aria-label="Playback time" className={`playbar-range ${styles.scrub}`}
+          style={{ ["--progress" as string]: `${progress}%` }}
+          onChange={(e) => seek(Number(e.target.value))} />
+        <span className={styles.time}>
+          {cursor.toFixed(1)}<span className="muted"> / {horizon.toFixed(0)} s</span>
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function BoardStats({ data, cursor }: { data: RunPayload; cursor: number }) {
+  const caught = (p: string) => (data.runs[p] ? atCursor(data.runs[p].timeline, cursor).intercepted : null);
+  const ours = caught("primes");
+  if (ours === null) return null;
+  const oracle = caught("oracle");
+  const rival = SPECTRUM_ORDER.filter((p) => p !== "primes" && data.runs[p])
+    .map((p) => ({ p, v: caught(p) ?? 0 }))
+    .sort((x, y) => y.v - x.v)[0];
+  const lead = rival ? ours - rival.v : null;
+  return (
+    <div className={styles.stats}>
+      {oracle !== null && (
+        <div className={styles.stat}>
+          <div className={styles.statValue}>{oracle > 0 ? `${Math.round((100 * ours) / oracle)}%` : "–"}</div>
+          <div className={styles.statLabel}>of Oracle&apos;s flashes caught by Smart Scan</div>
+        </div>
+      )}
+      {rival && lead !== null && (
+        <div className={styles.stat}>
+          <div className={styles.statValue} style={{ color: lead > 0 ? "var(--good)" : lead < 0 ? "var(--critical)" : undefined }}>
+            {lead > 0 ? `+${lead}` : lead}
+          </div>
+          <div className={styles.statLabel}>Smart Scan lead over {policyLabel(rival.p)}</div>
+        </div>
       )}
     </div>
   );
@@ -198,7 +362,7 @@ function DecisionStrip({ ex }: { ex: Explanation }) {
     <div className="stack" style={{ gap: 14 }}>
       <div className="hstack">
         <span
-          className="badge badge-md badge-outline mode-badge"
+          className={`badge badge-md badge-outline ${styles.decisionBadge}`}
           style={{ color: `var(--mode-${ex.mode})`, borderColor: `var(--mode-${ex.mode})` }}
         >
           {MODE_VERB[ex.mode]}
