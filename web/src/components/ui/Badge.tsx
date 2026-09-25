@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-export type BadgeTone = "neutral" | "accent" | "good" | "warn" | "critical" | "outline";
+export type BadgeTone = "neutral" | "accent" | "good" | "warn" | "critical" | "outline" | "saffron" | "leaf";
 
 export type BadgeProps = {
   children: ReactNode;

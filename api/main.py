@@ -12,6 +12,7 @@ from pathlib import Path
 import numpy as np
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from pydantic import BaseModel, Field
 
 from primes.data.turing import available_configs
@@ -24,7 +25,7 @@ from primes.policies.dqn import DEFAULT_MODEL
 ROOT = Path(__file__).resolve().parents[1]
 RUN_CACHE = ROOT / "artifacts" / "runs"
 BENCHMARK = ROOT / "artifacts" / "benchmark.json"
-CACHE_VERSION = "v3"  # bump whenever scheduler behaviour or default lineup changes
+CACHE_VERSION = "v4"  # bump whenever scheduler behaviour, default lineup or payload format changes
 LINEUP = ["primes", "dqn", "greedy", "raster", "random", "oracle"]
 PRIORS_PATH = ROOT / "primes" / "assets" / "priors.json"
 THREAT_PATH = ROOT / "primes" / "assets" / "threat_model.joblib"
@@ -33,6 +34,7 @@ EVAL_NPZ = ROOT / "artifacts" / "models" / "evaluations.npz"
 app = FastAPI(title="Smart Scan API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
                    allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(GZipMiddleware, minimum_size=4096)
 
 
 def _default_lineup() -> list[str]:

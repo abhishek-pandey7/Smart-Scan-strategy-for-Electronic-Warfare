@@ -48,7 +48,7 @@ function Panel({ y, name, color, looks }: { y: number; name: string; color: stri
   const hit = new Set(hits);
   return (
     <g>
-      <text x={0} y={y + 16} fontSize={15} fontWeight={650} fill="var(--text-primary)">{name}</text>
+      <text x={0} y={y + 16} fontSize={17} fontWeight={500} fill="var(--text-primary)" fontFamily="var(--font-display)">{name}</text>
       <text x={0} y={y + 40} fontSize={26} fontWeight={650} fill={color} fontFamily="var(--font-num)">{hits.length}</text>
       <text x={0} y={y + 58} fontSize={12} fill="var(--text-muted)">of {FLASHES.length} flashes caught</text>
       <rect x={L} y={y} width={W - L - R} height={H} rx={6} fill="var(--surface-2)" />
@@ -70,6 +70,10 @@ function Panel({ y, name, color, looks }: { y: number; name: string; color: stri
 function HeroArt() {
   return (
     <div className="hero-art">
+      <div className="hero-art-head">
+        <span className="hero-art-title">Same {T} seconds, two receivers</span>
+        <Badge tone="outline">illustration</Badge>
+      </div>
       <svg viewBox="0 0 600 262" role="img" aria-label="Illustration: the same radar flashes seen by a fixed sweep and by Smart Scan">
         <Panel y={0} name="Fixed sweep" color={policyColor("raster")} looks={RASTER} />
         <Panel y={128} name="Smart Scan" color={policyColor("primes")} looks={SMART} />
@@ -123,7 +127,9 @@ export default function OverviewPage() {
     <div className="stack-lg">
       <section className="hero">
         <div>
-          <div className="eyebrow">Electronic support · spectrum scheduling</div>
+          <div className="hero-chip">
+            <Badge tone="saffron" size="md" dot="var(--saffron)">Electronic support · spectrum scheduling</Badge>
+          </div>
           <h1 className="display">A receiver that learns <span className="accent-text">when and where</span> to listen.</h1>
           <p className="lede">
             Radars show up for milliseconds at a time, and a receiver can only tune to one slice of spectrum at once.
@@ -131,8 +137,13 @@ export default function OverviewPage() {
             listening time where it will catch the most.
           </p>
           <div className="hstack">
-            <Link href="/mission" className="btn btn-lg">Run the mission</Link>
+            <Link href="/mission" className="btn btn-lg btn-arrow">Run the mission</Link>
             <Link href="/how-it-decides" className="btn btn-lg secondary">How it decides</Link>
+          </div>
+          <div className="hero-facts">
+            <span><strong>{LINEUP.length}</strong>receivers in the lineup</span>
+            <span><strong>1</strong>shared ground truth</span>
+            <span><strong>95%</strong>bootstrap intervals on every benchmark</span>
           </div>
         </div>
         <HeroArt />
@@ -173,7 +184,7 @@ export default function OverviewPage() {
           <h2>See it on a real mission</h2>
           <p>Pick a scenario, run every receiver at once, and watch the flashes they catch add up.</p>
         </div>
-        <Link href="/mission" className="btn btn-lg">Run the mission</Link>
+        <Link href="/mission" className="btn btn-lg btn-arrow">Run the mission</Link>
       </section>
     </div>
   );

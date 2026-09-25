@@ -21,13 +21,22 @@ function lastIndexAtOrBefore(arr: number[], t: number) {
   return ans;
 }
 
-export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height = 260 }: {
-  scenario: Scenario; run: PolicyRun; cursor: number; colorVar: string; height?: number;
-}) {
+export type SpectrumCanvasProps = {
+  scenario: Scenario; run: PolicyRun; cursor: number; colorVar: string;
+  /** Fixed plot height in CSS px; ignored when `fill` is set. */
+  height?: number;
+  /** Size to the parent box in both dimensions (parent must have a definite height). */
+  fill?: boolean;
+  /** Show the "Frequency (GHz) vs time" caption under the plot. Defaults to true unless `fill`. */
+  caption?: boolean;
+};
+
+export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height = 260, fill = false, caption }: SpectrumCanvasProps) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
-  const [width, setWidth] = useState(800);
+  const [box, setBox] = useState({ w: 800, h: height });
   const [hover, setHover] = useState<Hover>(null);
+  const showCaption = caption ?? !fill;
 
   const flashFreq = useMemo(() => new Map(scenario.flashes.rows.map((r) => [`${r[0]}:${r[1]}`, r[4]])), [scenario]);
   const labels = useMemo(() => new Map(scenario.emitters.map((e) => [e.id, e])), [scenario]);
@@ -35,14 +44,24 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
   useEffect(() => {
     const el = wrap.current;
     if (!el) return;
-    const ro = new ResizeObserver(([entry]) => setWidth(Math.max(320, Math.floor(entry.contentRect.width))));
+    const ro = new ResizeObserver(([entry]) => {
+      const { width: w, height: h } = entry.contentRect;
+      setBox((b) => {
+        const next = fill
+          ? { w: Math.max(120, Math.floor(w)), h: Math.max(60, Math.floor(h)) }
+          : { w: Math.max(320, Math.floor(w)), h: b.h };
+        return next.w === b.w && next.h === b.h ? b : next;
+      });
+    });
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [fill]);
 
+  const width = box.w;
+  const plotHeight = fill ? box.h : height;
   const H = scenario.horizon_s;
   const plotW = width - PAD.left - PAD.right;
-  const plotH = height - PAD.top - PAD.bottom;
+  const plotH = plotHeight - PAD.top - PAD.bottom;
   const xOf = (t: number) => PAD.left + (t / H) * plotW;
   const yOf = (f: number) => PAD.top + (1 - f / FMAX) * plotH;
 
@@ -50,28 +69,30 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     const cv = canvas.current, el = wrap.current;
     if (!cv || !el) return;
     const dpr = window.devicePixelRatio || 1;
-    cv.width = width * dpr; cv.height = height * dpr;
+    const pw = Math.round(width * dpr), ph = Math.round(plotHeight * dpr);
+    if (cv.width !== pw || cv.height !== ph) { cv.width = pw; cv.height = ph; }
     const ctx = cv.getContext("2d")!;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     const c = {
       surface: cssVar(el, "--surface-1"), grid: cssVar(el, "--grid"), muted: cssVar(el, "--text-muted"),
       truth: cssVar(el, "--truth"), series: cssVar(el, colorVar), ink: cssVar(el, "--text-primary"),
     };
-    ctx.fillStyle = c.surface; ctx.fillRect(0, 0, width, height);
+    ctx.fillStyle = c.surface; ctx.fillRect(0, 0, width, plotHeight);
 
-    // recessive grid: every 3 GHz, every 10 s
+    // recessive grid: every 3 GHz (every 6 GHz when short), every 10 s
     ctx.strokeStyle = c.grid; ctx.lineWidth = 1; ctx.fillStyle = c.muted;
     const mono = cssVar(el, "--font-mono") || "ui-monospace, Cascadia Mono, Consolas, monospace";
     ctx.font = `11px ${mono}`;
     ctx.textAlign = "right"; ctx.textBaseline = "middle";
-    for (let f = 0; f <= FMAX; f += 3000) {
+    const fStep = plotH < 120 ? 6000 : 3000;
+    for (let f = 0; f <= FMAX; f += fStep) {
       const y = Math.round(yOf(f)) + 0.5;
       ctx.beginPath(); ctx.moveTo(PAD.left, y); ctx.lineTo(width - PAD.right, y); ctx.stroke();
       ctx.fillText(`${f / 1000}`, PAD.left - 8, y);
     }
     ctx.textAlign = "center"; ctx.textBaseline = "top";
     const step = H > 40 ? 10 : 5;
-    for (let t = 0; t <= H + 1e-9; t += step) ctx.fillText(`${t}s`, xOf(t), height - PAD.bottom + 6);
+    for (let t = 0; t <= H + 1e-9; t += step) ctx.fillText(`${t}s`, xOf(t), plotHeight - PAD.bottom + 6);
 
     ctx.save();
     ctx.beginPath(); ctx.rect(PAD.left, PAD.top, plotW, plotH); ctx.clip();
@@ -79,11 +100,12 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     // receiver dwells: the band each look covered (±250 MHz drawn, so neighbours stay distinct).
     // Short search dwells are drawn faint so that thousands of them read as a wash, not a wall.
     const n = lastIndexAtOrBefore(run.looks.t, cursor);
+    const bandH = Math.max(1, yOf(-250) - yOf(250));
     ctx.fillStyle = c.series;
     for (let i = 0; i <= n; i++) {
       const t = run.looks.t[i], f = scenario.centres_mhz[run.looks.centre[i]], d = run.looks.dwell_ms[i];
       ctx.globalAlpha = d >= 50 ? 0.3 : d >= 25 ? 0.2 : 0.09;
-      ctx.fillRect(xOf(t), yOf(f + 250), Math.max(1, (d / 1000 / H) * plotW), yOf(f - 250) - yOf(f + 250));
+      ctx.fillRect(xOf(t), yOf(f + 250), Math.max(1, (d / 1000 / H) * plotW), bandH);
     }
     ctx.globalAlpha = 1;
 
@@ -95,11 +117,12 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     }
 
     // intercepts: dots with a surface ring, at the time the flash was caught
+    const r = plotH < 140 ? 3 : 4;
     for (const [tHit, e, k] of run.intercepts) {
       if (tHit > cursor) break;
       const f = flashFreq.get(`${e}:${k}`) ?? labels.get(e)?.freqs_mhz[0] ?? 0;
-      ctx.beginPath(); ctx.arc(xOf(tHit), yOf(f), 4, 0, Math.PI * 2);
-      ctx.fillStyle = c.series; ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = c.surface; ctx.stroke();
+      ctx.beginPath(); ctx.arc(xOf(tHit), yOf(f), r, 0, Math.PI * 2);
+      ctx.fillStyle = c.series; ctx.fill(); ctx.lineWidth = 1.5; ctx.strokeStyle = c.surface; ctx.stroke();
     }
     ctx.restore();
 
@@ -108,7 +131,7 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     const cx = Math.round(xOf(Math.min(cursor, H))) + 0.5;
     ctx.beginPath(); ctx.moveTo(cx, PAD.top); ctx.lineTo(cx, PAD.top + plotH); ctx.stroke();
     ctx.globalAlpha = 1;
-  }, [scenario, run, cursor, width, height, colorVar, flashFreq, labels, H, plotW, plotH]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scenario, run, cursor, width, plotHeight, colorVar, flashFreq, labels, H, plotW, plotH]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function onMove(ev: React.MouseEvent<HTMLCanvasElement>) {
     const rect = ev.currentTarget.getBoundingClientRect();
@@ -129,18 +152,39 @@ export default function SpectrumCanvas({ scenario, run, cursor, colorVar, height
     });
   }
 
+  const tooltip = hover && (
+    <div className="tooltip" style={{
+      left: Math.max(0, Math.min(hover.x + 12, width - 260)),
+      top: fill && hover.y > plotHeight / 2 ? hover.y - 80 : hover.y + 12,
+    }}>
+      <div className="t-head">{hover.lines[0]}</div>
+      {hover.lines.slice(1).map((l) => <div key={l}>{l}</div>)}
+    </div>
+  );
+  const cv = (
+    <canvas ref={canvas}
+      style={{ width, height: plotHeight, display: "block", borderRadius: 8, ...(fill ? { position: "absolute", inset: 0 } : null) }}
+      onMouseMove={onMove} onMouseLeave={() => setHover(null)}
+      role="img" aria-label={`Spectrum-time view of ${policyLabel(run.policy)} dwells and intercepts`} />
+  );
+
+  if (fill) {
+    return (
+      <div style={{ position: "relative", width: "100%", height: "100%", minHeight: 0, display: "flex", flexDirection: "column" }}>
+        <div ref={wrap} style={{ position: "relative", flex: 1, minHeight: 0, overflow: "hidden" }}>
+          {cv}
+        </div>
+        {tooltip}
+        {showCaption && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>Frequency (GHz) vs time</div>}
+      </div>
+    );
+  }
+
   return (
     <div ref={wrap} style={{ position: "relative" }}>
-      <canvas ref={canvas} style={{ width, height, display: "block", borderRadius: 8 }}
-        onMouseMove={onMove} onMouseLeave={() => setHover(null)}
-        role="img" aria-label={`Spectrum-time view of ${policyLabel(run.policy)} dwells and intercepts`} />
-      {hover && (
-        <div className="tooltip" style={{ left: Math.min(hover.x + 12, width - 260), top: hover.y + 12 }}>
-          <div className="t-head">{hover.lines[0]}</div>
-          {hover.lines.slice(1).map((l) => <div key={l}>{l}</div>)}
-        </div>
-      )}
-      <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>Frequency (GHz) vs time</div>
+      {cv}
+      {tooltip}
+      {showCaption && <div className="muted" style={{ fontSize: 11, marginTop: 2 }}>Frequency (GHz) vs time</div>}
     </div>
   );
 }

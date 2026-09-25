@@ -7,8 +7,8 @@ export type CardProps = {
   actions?: ReactNode;
   /** Colour of a 4px left rule, e.g. policyColor("primes"). */
   accent?: string;
-  /** "flat" drops the border and shadow; "tint" uses the recessed surface. */
-  variant?: "default" | "flat" | "tint";
+  /** "flat" drops the border and shadow; "tint" uses the recessed surface; "glass" is translucent over the page glow. */
+  variant?: "default" | "flat" | "tint" | "glass";
   pad?: "sm" | "md" | "lg";
   className?: string;
   style?: CSSProperties;

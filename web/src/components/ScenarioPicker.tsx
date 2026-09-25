@@ -11,9 +11,11 @@ export type ScenarioPickerProps = {
   /** First `turing:*` id from the catalog, if any. */
   turingId?: string | null;
   disabled?: boolean;
+  /** Scenario currently being computed; its card shows a running state. */
+  pendingId?: string | null;
 };
 
-export default function ScenarioPicker({ selected, onSelect, turingId, disabled }: ScenarioPickerProps) {
+export default function ScenarioPicker({ selected, onSelect, turingId, disabled, pendingId }: ScenarioPickerProps) {
   const ids = [...SIM_SCENARIOS, ...(turingId ? [turingId] : [])];
   return (
     <div className="scenario-picker" role="listbox" aria-label="Scenario">
@@ -21,17 +23,19 @@ export default function ScenarioPicker({ selected, onSelect, turingId, disabled 
         const b = briefing(id);
         const active = id === selected;
         const real = id.startsWith("turing:");
+        const pending = id === pendingId;
         return (
           <button
             key={id}
             type="button"
             role="option"
             aria-selected={active}
+            aria-busy={pending || undefined}
             disabled={disabled}
             className={["scenario-card", active && "scenario-card-active", real && "scenario-card-real"].filter(Boolean).join(" ")}
             onClick={() => onSelect(id)}
           >
-            <span className="scenario-card-eyebrow">{real ? "Real dataset" : "Simulated"}</span>
+            <span className="scenario-card-eyebrow">{pending ? "Running…" : real ? "Real dataset" : "Simulated"}</span>
             <strong className="scenario-card-title">{b.short}</strong>
             <span className="scenario-card-tag">{b.tagline ?? b.tests}</span>
           </button>

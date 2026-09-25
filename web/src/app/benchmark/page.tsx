@@ -57,7 +57,7 @@ export default function BenchmarkPage() {
 
       {bench && group && (
         <>
-          <div className="hstack" style={{ justifyContent: "space-between", alignItems: "center" }}>
+          <div className="meta-row">
             <div className="segmented" role="group" aria-label="Winner scope">
               <button type="button" aria-pressed={winnerScope === "group"} onClick={() => setWinnerScope("group")}>
                 This scenario
@@ -125,27 +125,14 @@ export default function BenchmarkPage() {
 
                 {policiesInGroup.ablations.length > 0 && (
                   <details
+                    className="disclosure"
                     open={showAblations}
                     onToggle={(e) => setShowAblations((e.target as HTMLDetailsElement).open)}
-                    style={{
-                      borderTop: "1px solid var(--border)",
-                      paddingTop: 14,
-                      marginTop: 4,
-                    }}
                   >
-                    <summary
-                      style={{
-                        cursor: "pointer",
-                        fontWeight: 600,
-                        listStyle: "none",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 10,
-                      }}
-                    >
+                    <summary>
                       Ablations
                       <Badge tone="outline">{policiesInGroup.ablations.length}</Badge>
-                      <span className="muted small" style={{ fontWeight: 450 }}>
+                      <span className="muted">
                         Smart Scan variants that turn individual components off
                       </span>
                     </summary>
