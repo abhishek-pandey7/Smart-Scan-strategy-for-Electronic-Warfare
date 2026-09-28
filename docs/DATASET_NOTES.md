@@ -75,14 +75,14 @@ Splitting each emitter's stare-mode pulses into illuminations (gaps > 50 ms, ≥
 
 - Only **12 %** of emitters are *flash-like* (visible < 5 % of the time). The rest are visible for long, irregular stretches (sidelobes, moving platforms, wide beams, multi-second illuminations).
 - Among flash-like emitters, illumination gaps are almost never clean multiples of the metadata scan period (1 of 53). Real visibility is **intermittent, not cleanly periodic**.
-- Consequence: a purely periodic-flash predictor is the wrong single model for this data. Smart Scan therefore runs a **periodic model and a Gilbert–Elliott on/off model per emitter** and lets hits and misses decide between them, and it **learns online how visible undiscovered emitters are** (the κ factor) instead of trusting the metadata-derived flash prior.
+- Consequence: a purely periodic-flash predictor is the wrong single model for this data. Eklavya therefore runs a **periodic model and a Gilbert–Elliott on/off model per emitter** and lets hits and misses decide between them, and it **learns online how visible undiscovered emitters are** (the κ factor) instead of trusting the metadata-derived flash prior.
 
 ## Learned priors (`train_scan`, 2,500 scenarios, 128,252 emitters)
 
 Fitted by streaming per-transmitter metadata over the HF API (`primes/data/fit_priors.py`, ~10 min, no download):
 
 - **96.2 % of circular scan periods fall on 22 discrete values.** Top: 2 s (12.3 %), 10 s (10.7 %), 1 s (10.7 %), 4 s (10.6 %), 5 s (7.7 %), 2.5 s (6.1 %), 6 s (4.6 %), 3 s (4.5 %).
-- Within the 0.5–30 s range that matters for a 30–60 s engagement, 19 discrete periods carry 96.3 % of the mass. After a **single** catch, Smart Scan therefore only has to test ~19 candidate return times, and one more hit or a few misses usually settle it.
+- Within the 0.5–30 s range that matters for a 30–60 s engagement, 19 discrete periods carry 96.3 % of the mass. After a **single** catch, Eklavya therefore only has to test ~19 candidate return times, and one more hit or a few misses usually settle it.
 - Omni fraction 3.6 %; frequency-mode and PRI distributions match the validation split above.
 
 ## Radar types and threat labels
@@ -94,7 +94,7 @@ The metadata names each emitter's radar type (`function`): **68 types**, e.g. AN
 - Identifying a *known* type from observed parameters is a library lookup, exactly as in operational ESM emitter libraries. A gradient-boosted classifier on observable features (frequency, PRI set, PW set, scan period, flash width, with measurement noise and partial observation) reaches **100 %** on the validation split. That number is expected, not impressive.
 - The meaningful test is **leave-one-radar-type-out**: predict the threat level of a type the model has never seen from its parameters alone. Result: **63 % three-way accuracy vs 48.5 % chance**, recall 0.65 / 0.62 / 0.64 for low / medium / high, and the *priority weight* it assigns is correctly ordered on average (low 1.04, medium 1.54, high 2.26 on a 0.3 / 1 / 3 scale). So for unseen radars the model is a directionally correct prior, not an identifier. Hardest cases are naval/ground surveillance radars that share parameter ranges with fire-control sets.
 
-**In the scheduler.** Online, from the partial and noisy parameters it has actually measured, Smart Scan assigns the correct threat level to 53 % of tracks on real scenarios, and 86 % on simulated `dense`, whose emitters are sampled from the same population. Using the expected weight as a priority on the three real tuning scenarios lifts high-threat interception from 69.7 % to 77.6 % and cuts time to first high-threat catch from 9.8 s to 7.7 s. It stays a variant (`primes_threat`), not the default, because it costs overall interception on crowded simulated scenarios.
+**In the scheduler.** Online, from the partial and noisy parameters it has actually measured, Eklavya assigns the correct threat level to 53 % of tracks on real scenarios, and 86 % on simulated `dense`, whose emitters are sampled from the same population. Using the expected weight as a priority on the three real tuning scenarios lifts high-threat interception from 69.7 % to 77.6 % and cuts time to first high-threat catch from 9.8 s to 7.7 s. It stays a variant (`primes_threat`), not the default, because it costs overall interception on crowded simulated scenarios.
 
 ## PDW features for deinterleaving (tuning configs 5, 50, 100)
 
@@ -108,15 +108,15 @@ A bearing-first deinterleaver with an alpha-beta bearing tracker gets 0.98–1.0
 
 ## Robustness on real scenarios (11 benchmark configs)
 
-Smart Scan interception on the 11 real stare-mode scenarios:
+Eklavya interception on the 11 real stare-mode scenarios:
 
 - **Nominal:** 69.8 %.
 - **P_d = 0.9 / 0.7 / 0.5:** 62.1 / 56.9 / 48.2 %, against an oracle at 82.9 / 78.3 / 71.1 % (84.8 % nominal).
 - **P_fa = 0.001 / 0.005 / 0.02 per look:** 69.7 / 70.3 / 66.8 %.
 
-Real scenarios tolerate false alarms better than the pooled set: −3 vs −11 points at the stress rate. Their many visible emitters give real tracks repeated hits that false tracks never get. Full table: `docs/SMART_SCAN_FULL_ARCHITECTURE.md` §3.1; data in `artifacts/robustness.json`.
+Real scenarios tolerate false alarms better than the pooled set: −3 vs −11 points at the stress rate. Their many visible emitters give real tracks repeated hits that false tracks never get. Full table: `docs/EKLAVYA_FULL_ARCHITECTURE.md` §3.1; data in `artifacts/robustness.json`.
 
-## Design implications for Smart Scan
+## Design implications for Eklavya
 
 1. **Two visibility regimes.** Flash-like emitters (12 %) reward learning period and phase and placing *short, well-timed* dwells. The majority are intermittently visible for seconds at a time; for those the question is "is it on right now?", answered by an on/off Markov belief that decays between looks.
 2. **Learning must succeed from 2–3 observations.** With ~19 discrete period candidates from the learned prior and interval-censored misses, a periodic emitter is usually pinned down by its second or third catch. That favours an explicit Bayesian predictor over model-free DRL, which is sample-hungry.

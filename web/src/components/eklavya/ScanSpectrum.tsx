@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type PointerEvent } from "react";
 import { indexAtOrBefore, type Explanation, type PolicyRun, type Scenario } from "@/lib/api";
 import type { FlashIndex, NextFlash } from "./derive";
-import s from "./smartscan.module.css";
+import s from "./eklavya.module.css";
 
 const PAD = { left: 40, right: 10, top: 10, bottom: 22 };
 const FMAX = 18_000;
@@ -177,7 +177,7 @@ export default function ScanSpectrum({ scenario, run, fx, cursor, windowS, decis
       <canvas ref={canvas} style={{ width, height }} className={s.canvas}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); seek(e); }}
         onPointerMove={(e) => { if (e.buttons) seek(e); }}
-        role="img" aria-label={`Smart Scan looks and radar flashes from ${t0.toFixed(1)} to ${t1.toFixed(1)} s`} />
+        role="img" aria-label={`Eklavya looks and radar flashes from ${t0.toFixed(1)} to ${t1.toFixed(1)} s`} />
     </div>
   );
 }

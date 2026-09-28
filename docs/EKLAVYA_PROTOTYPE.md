@@ -1,14 +1,14 @@
-# Smart Scan Prototype — Demo Scope
+# Eklavya Prototype — Demo Scope
 
-The smallest system that demonstrates the Smart Scan idea end-to-end. The full design is in [`SMART_SCAN_FULL_ARCHITECTURE.md`](SMART_SCAN_FULL_ARCHITECTURE.md).
+The smallest system that demonstrates the Eklavya idea end-to-end. The full design is in [`EKLAVYA_FULL_ARCHITECTURE.md`](EKLAVYA_FULL_ARCHITECTURE.md).
 
 ## Demo story (what the jury sees)
 
-> **An open-loop sweep catches only ~6 % of narrow main-beam radar flashes (measured on real Turing scenarios) and can be locked out entirely. Smart Scan learns each emitter's scan timing from its first few hits and misses, then catches far more flashes, finds pop-up emitters faster, and breaks lock-out, on simulated scenarios and on real Turing dataset scenarios.**
+> **An open-loop sweep catches only ~6 % of narrow main-beam radar flashes (measured on real Turing scenarios) and can be locked out entirely. Eklavya learns each emitter's scan timing from its first few hits and misses, then catches far more flashes, finds pop-up emitters faster, and breaks lock-out, on simulated scenarios and on real Turing dataset scenarios.**
 
 Side-by-side, same scenario, same truth:
 
-| | Raster (open-loop) | Smart Scan |
+| | Raster (open-loop) | Eklavya |
 |---|---|---|
 | Where it looks | fixed 2.15 s sweep | predicted flashes + search |
 | Lock-out scenario | never intercepts emitter | intercepts within seconds |
@@ -24,7 +24,7 @@ Side-by-side, same scenario, same truth:
 | Turing receiver replica: 36 centres, ±500 MHz, exact 2.15 s raster schedule | Wideband cueing receiver, multi-receiver |
 | **Association:** default replays use labelled pulses; `primes_pdw` deinterleaves unlabelled PDWs itself (measured −0.8 points) | learned embeddings (transformer metric learning) |
 | **Learned priors** from 2,500 Turing training scenarios (HF API) | Empirical-Bayes refits from field logs |
-| Smart Scan: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
+| Eklavya: periodic **and Gilbert–Elliott** track models, undiscovered-cell belief with **online-learned visibility κ**, rate index + IG, dwell ∈ {10, 25, 50, 100} ms, search dither, per-decision explanation | Whittle index, aperiodic hypotheses, Optuna tuning |
 | Baselines: raster, random, greedy bandit, oracle; **Double-DQN comparator** (SB3) | Farey sweep, residual RL + shield |
 | Core metrics, 10 seeds, bootstrap CIs; ablations (flat prior, no information gain) | Stratified statistics, 30+ seeds, per-track association ablation |
 | Replay on 11 Turing `val_stare` scenarios | Full validation/test sweep, scan-mode cross-validation |
@@ -45,9 +45,9 @@ flowchart LR
         RND["Random"]
         GRD["Greedy"]
         ORA["Oracle"]
-        PRM["Smart Scan"]
+        PRM["Eklavya"]
     end
-    subgraph SSCAN["Smart Scan internals"]
+    subgraph SSCAN["Eklavya internals"]
         PRI["Learned priors<br/>(22 discrete periods)"] --> TRK
         TRK["Periodic + on/off track models"] --> IDX["Rate index + IG"]
         UND["Undiscovered-cell belief<br/>learned visibility κ"] --> IDX
@@ -120,7 +120,7 @@ class Policy(Protocol):
 | `Greedy` | centre with the most hits so far (with small ε exploration), 50 ms dwell |
 | `Oracle` | reads truth: dwells on the next flash not yet intercepted (upper bound) |
 
-### 5. Smart Scan (`primes/policies/primes_lite.py`)
+### 5. Eklavya (`primes/policies/primes_lite.py`)
 
 **Track model (per emitter ID):**
 - **Flash times:** hits give flash times `f₁, f₂, …` (first received pulse, or midpoint when both edges are inside the dwell), plus observed flash width.
@@ -192,7 +192,7 @@ Reported as mean ± 95 % bootstrap CI over **10 seeds**.
 
 **Robustness result** (1,008 runs, all 36 scenarios pooled):
 
-| Condition | Raster | Greedy | **Smart Scan** (95 % CI) | Oracle | Smart Scan / oracle | Smart Scan on real scenarios |
+| Condition | Raster | Greedy | **Eklavya** (95 % CI) | Oracle | Eklavya / oracle | Eklavya on real scenarios |
 |---|---|---|---|---|---|---|
 | nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
 | P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
@@ -215,12 +215,12 @@ Reported as mean ± 95 % bootstrap CI over **10 seeds**.
 **FastAPI:** `GET /api/catalog` (scenarios, policies), `POST /api/runs` (replay the requested policies on identical truth, cache to disk), `GET /api/runs/{id}`, `GET /api/benchmark`.
 
 **Next.js — Mission page (`/mission`):**
-1. **Controls:** scenario picker (six cards); one "Run all receivers" action. Lineup: Smart Scan, Double-DQN, Greedy bandit, Raster, Random, plus Oracle as a dashed upper-bound reference.
+1. **Controls:** scenario picker (six cards); one "Run all receivers" action. Lineup: Eklavya, Double-DQN, Greedy bandit, Raster, Random, plus Oracle as a dashed upper-bound reference.
 2. **Live leaderboard:** flashes caught and radars found, re-ranked at the playback cursor.
 3. **Spectrum-time small multiples:** one canvas per receiver, synced to the same cursor (x = time, y = frequency; truth ticks, dwells, intercepts).
 4. **Cumulative chart and results:** flashes caught over time for every line (Oracle dashed); winner badges, metric bars, ranked scorecard.
-5. **Smart Scan decision strip:** mode, frequency, dwell, and score breakdown at the cursor (links to "How it decides").
-6. **Learned tracks:** estimated vs true period (or intermittent) per emitter in the Smart Scan lane.
+5. **Eklavya decision strip:** mode, frequency, dwell, and score breakdown at the cursor (links to "How it decides").
+6. **Learned tracks:** estimated vs true period (or intermittent) per emitter in the Eklavya lane.
 
 **Benchmark page:** per-scenario interval plots (mean, 95 % bootstrap CI) for every scheduler and metric, plus a table.
 
@@ -256,16 +256,16 @@ scripts/inspect_turing_dataset.py
 | 1 | `types.py`, scenario + receiver models, pulse truth | raster on `lockout` never intercepts the exact-lock-out emitter |
 | 2 | replay + metrics + raster / random / oracle | deterministic replay; oracle ≥ every policy |
 | 3 | track model | recovers true `T` within 1 % after ≤ 3 flashes on `easy` |
-| 4 | undiscovered belief + index + dither → Smart Scan | beats raster and greedy on interception ratio (`easy`, `dense`) and breaks `lockout` |
+| 4 | undiscovered belief + index + dither → Eklavya | beats raster and greedy on interception ratio (`easy`, `dense`) and breaks `lockout` |
 | 5 | `popup` + Turing replay on 10 files | lower new-emitter latency; results on real scenarios |
 | 6 | FastAPI + Next.js demo | side-by-side playback of all scenarios |
 | 7 | Double-DQN comparator + multi-seed benchmark | fair ML rival; confidence intervals |
 
 ## Acceptance criteria for the demo
 
-- **Lock-out:** on `lockout`, raster never intercepts the exact-lock-out emitter in 30 s, and Smart Scan does.
-- **Interception ratio:** Smart Scan beats raster, random and greedy on `easy`, `dense` and the Turing scenarios, with non-overlapping CIs.
-- **Prediction:** correct-prediction rate and intercept-time error are reported for Smart Scan tracks.
+- **Lock-out:** on `lockout`, raster never intercepts the exact-lock-out emitter in 30 s, and Eklavya does.
+- **Interception ratio:** Eklavya beats raster, random and greedy on `easy`, `dense` and the Turing scenarios, with non-overlapping CIs.
+- **Prediction:** correct-prediction rate and intercept-time error are reported for Eklavya tracks.
 - **Demo:** every number in the UI comes from replayed runs, and nothing is hard-coded.
 
 ## Run

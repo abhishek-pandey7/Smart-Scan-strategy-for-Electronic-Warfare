@@ -2,7 +2,7 @@
 
 import { MODES, modeColor } from "@/components/explain/modes";
 import type { SecondCell } from "./derive";
-import s from "./smartscan.module.css";
+import s from "./eklavya.module.css";
 
 const short = (v: number | null) => (v === null ? "·" : v >= 100 ? v.toFixed(0) : v >= 10 ? v.toFixed(0) : v.toFixed(1));
 

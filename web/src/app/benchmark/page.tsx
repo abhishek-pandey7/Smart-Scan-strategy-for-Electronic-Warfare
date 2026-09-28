@@ -134,7 +134,7 @@ export default function BenchmarkPage() {
                       Ablations
                       <Badge tone="outline">{policiesInGroup.ablations.length}</Badge>
                       <span className="muted">
-                        Smart Scan variants that turn individual components off
+                        Eklavya variants that turn individual components off
                       </span>
                     </summary>
                     <div className="stack" style={{ marginTop: 14 }}>

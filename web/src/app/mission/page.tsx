@@ -111,8 +111,8 @@ export default function MissionPage() {
     });
   }, [data, chartIds]);
 
-  const smartScan = data?.runs.primes;
-  const explanation = smartScan ? itemAtCursor(smartScan.explanations, pb.cursor) : undefined;
+  const eklavya = data?.runs.primes;
+  const explanation = eklavya ? itemAtCursor(eklavya.explanations, pb.cursor) : undefined;
   const isTuring = (pending ?? scenario ?? "").startsWith("turing:");
   const runScenario = data?.request.scenario;
   const b = runScenario ? briefing(runScenario) : null;
@@ -217,10 +217,10 @@ export default function MissionPage() {
             </SpectrumGrid>
           </section>
 
-          {smartScan && (
+          {eklavya && (
             <section className="stack">
               <SectionHeader
-                eyebrow="Smart Scan"
+                eyebrow="Eklavya"
                 title="What it decided just now"
                 lede="Mode, frequency, dwell, and score terms at the playhead. Synced to the simulator above."
                 actions={
@@ -336,7 +336,7 @@ function BoardStats({ data, cursor }: { data: RunPayload; cursor: number }) {
       {oracle !== null && (
         <div className={styles.stat}>
           <div className={styles.statValue}>{oracle > 0 ? `${Math.round((100 * ours) / oracle)}%` : "–"}</div>
-          <div className={styles.statLabel}>of Oracle&apos;s flashes caught by Smart Scan</div>
+          <div className={styles.statLabel}>of Oracle&apos;s flashes caught by Eklavya</div>
         </div>
       )}
       {rival && lead !== null && (
@@ -344,7 +344,7 @@ function BoardStats({ data, cursor }: { data: RunPayload; cursor: number }) {
           <div className={styles.statValue} style={{ color: lead > 0 ? "var(--good)" : lead < 0 ? "var(--critical)" : undefined }}>
             {lead > 0 ? `+${lead}` : lead}
           </div>
-          <div className={styles.statLabel}>Smart Scan lead over {policyLabel(rival.p)}</div>
+          <div className={styles.statLabel}>Eklavya lead over {policyLabel(rival.p)}</div>
         </div>
       )}
     </div>

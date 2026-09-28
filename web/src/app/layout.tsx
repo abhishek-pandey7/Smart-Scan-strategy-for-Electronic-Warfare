@@ -11,7 +11,7 @@ const serif = Newsreader({
 });
 
 export const metadata: Metadata = {
-  title: { default: "Smart Scan", template: "%s · Smart Scan" },
+  title: { default: "Eklavya", template: "%s · Eklavya" },
   description: "A receiver scheduler that learns when and where to listen, so it catches radar flashes a fixed sweep misses.",
 };
 
@@ -37,7 +37,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <header className="topbar">
           <div className="topbar-inner">
-            <Link href="/" className="brand"><BrandMark id="brand-glow-top" />Smart Scan<small>for electronic support receivers</small></Link>
+            <Link href="/" className="brand"><BrandMark id="brand-glow-top" />Eklavya<small>for electronic support receivers</small></Link>
             <Nav />
           </div>
         </header>
@@ -45,7 +45,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <footer className="site-footer">
           <div className="site-footer-inner">
             <div>
-              <Link href="/" className="brand"><BrandMark id="brand-glow-foot" />Smart Scan</Link>
+              <Link href="/" className="brand"><BrandMark id="brand-glow-foot" />Eklavya</Link>
               <p className="site-footer-tag">
                 A receiver scheduler that learns each radar&apos;s rhythm and spends its listening time where the next flash will be.
               </p>
