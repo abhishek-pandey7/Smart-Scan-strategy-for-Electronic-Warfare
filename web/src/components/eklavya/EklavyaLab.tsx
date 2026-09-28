@@ -9,7 +9,7 @@ import ScanSpectrum from "./ScanSpectrum";
 import SecondStrip from "./SecondStrip";
 import SymbolLegend from "./SymbolLegend";
 import { indexFlashes, nextFlashes, perSecond } from "./derive";
-import s from "./smartscan.module.css";
+import s from "./eklavya.module.css";
 
 const SCENARIOS = [
   { id: "lockout", label: "Lock-out" },
@@ -22,7 +22,7 @@ const SPECTRUM_H = 480;
 
 type Loaded = RunPayload | { error: string };
 
-export default function SmartScanLab() {
+export default function EklavyaLab() {
   const [scenario, setScenario] = useState("lockout");
   const [cache, setCache] = useState<Record<string, Loaded>>({});
   const loaded = cache[scenario];
@@ -44,7 +44,7 @@ export default function SmartScanLab() {
     <div className={s.page}>
       <header className={s.top}>
         <div>
-          <div className="eyebrow">Smart Scan</div>
+          <div className="eyebrow">Eklavya</div>
           <h1 className={s.title}>The math behind every look</h1>
         </div>
         <div className="segmented" role="group" aria-label="Scenario">
@@ -57,8 +57,8 @@ export default function SmartScanLab() {
       {payload && run ? <Lab key={scenario} payload={payload} run={run} />
         : loaded && "error" in loaded ? (
           <div className="notice error">Replay failed: {loaded.error} <button type="button" className="btn secondary" onClick={retry}>Retry</button></div>
-        ) : payload ? <div className="notice">No Smart Scan lane in this run.</div>
-        : <div className="notice">Replaying Smart Scan on {SCENARIOS.find((x) => x.id === scenario)?.label}… (first run up to a minute, then cached)</div>}
+        ) : payload ? <div className="notice">No Eklavya lane in this run.</div>
+        : <div className="notice">Replaying Eklavya on {SCENARIOS.find((x) => x.id === scenario)?.label}… (first run up to a minute, then cached)</div>}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-# Smart Scan Strategy for Electronic Warfare
+# Eklavya Strategy for Electronic Warfare
 
 ## Context
 
@@ -21,12 +21,12 @@ Our dataset analysis ([`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md)) makes th
 
 ### Why this approach (research verdict)
 
-| Family | Role in Smart Scan |
+| Family | Role in Eklavya |
 |---|---|
 | Open-loop periodic sweep; Farey/Diophantine-optimised sweep (Clarkson 2011) | Baselines, plus the analytic treatment of optimal periodic interception in the report |
 | Myopic / greedy on a belief state | Baseline. Cannot represent the phase of a periodic scanner. |
 | Restless multi-armed bandit, Whittle / marginal-productivity index (Liu & Zhao; PCL for imperfect binary feedback) | Theoretical backbone of the Index layer. The MVP uses a simpler rate index. |
-| Double-DQN scheduler (current published ML approach) | **ML comparator.** It is what Smart Scan must beat. |
+| Double-DQN scheduler (current published ML approach) | **ML comparator.** It is what Eklavya must beat. |
 | Residual deep RL (NeurWIN-style learned index correction) | Extension layer (Phase 6), bounded by a shield |
 | Full POMDP solvers | Intractable at 36 centres × many emitters. Not used. |
 
@@ -89,7 +89,7 @@ $$
 p_k(t) = 1 - (1 - q_k\,\bar p_{\text{new}}) \prod_{e \in \text{tracks}(k)} \big(1 - p_e(t)\big), \qquad p_e(t)=\sum_h w_h\, p_{e,h}(t)
 $$
 
-Uncertainty is carried by the hypothesis weights `w_h`, which tells Smart Scan which cells are worth observing to learn, not only which are likely to transmit.
+Uncertainty is carried by the hypothesis weights `w_h`, which tells Eklavya which cells are worth observing to learn, not only which are likely to transmit.
 
 **Learned priors (the MVP's trained component).** Priors over period, flash width, agility mode and emitter density are **fitted from the 2,500 `train_scan` scenarios** (metadata streamed via the HF API; see Environment & data). This is trained on data, speeds up learning from the first flashes, and is ablated (learned prior vs. flat prior). At run time the scheduler never sees scenario metadata, so it still starts with no intelligence about the emitters in front of it.
 
@@ -117,7 +117,7 @@ $$
 
 ### Anti-synchronisation
 
-Once Smart Scan tracks emitters, its look times are driven by predictions and it breaks synchronisation by itself. Lock-out risk returns in **search mode**: when beliefs are flat, the index ordering degenerates into a deterministic sweep. There, and only there, Smart Scan dithers:
+Once Eklavya tracks emitters, its look times are driven by predictions and it breaks synchronisation by itself. Lock-out risk returns in **search mode**: when beliefs are flat, the index ordering degenerates into a deterministic sweep. There, and only there, Eklavya dithers:
 - Choose among ε-near-tied actions using a golden-ratio low-discrepancy sequence.
 - Randomise the dwell start offset.
 - Assert that the realised search revisit interval is not near-commensurate with the period prior's support.
@@ -131,7 +131,7 @@ $$
 - **Residual policy:** a small GRU policy trained with PPO on randomised scenarios learns `ΔI`, only the part the explicit model misses.
 - **Shield:** clamps the combined policy so its value on the analytic objective never falls more than a set margin below the analytic choice.
 - **Evaluation:** on held-out scenario families.
-- **Benefits:** a working intelligent scheduler exists before any RL training; decisions stay explainable; and RL is judged against analytic Smart Scan, not merely against open-loop sweeping.
+- **Benefits:** a working intelligent scheduler exists before any RL training; decisions stay explainable; and RL is judged against analytic Eklavya, not merely against open-loop sweeping.
 
 ---
 
@@ -232,7 +232,7 @@ Rate index with information gain, overlap-aware coverage, staleness weights, dwe
 - **Compared against:** every Phase-2 baseline **and a Double-DQN scheduler** (SB3, same Gymnasium environment, tuned fairly).
 - **Principal experiments:** `lockout-exact`, `lockout-near`, `popup`, `dense`.
 
-**Gate:** analytic Smart Scan beats greedy and DQN on TTFI (mean and p95) and interception ratio, with non-overlapping CIs, and breaks both lock-out scenarios.
+**Gate:** analytic Eklavya beats greedy and DQN on TTFI (mean and p95) and interception ratio, with non-overlapping CIs, and breaks both lock-out scenarios.
 
 ### Phase 5 — Expanded predictor
 - **New hypotheses:** Gilbert–Elliott Markov, frequency-agile tracks spanning cells, aperiodic / Poisson, omni.
@@ -247,17 +247,17 @@ GRU / PPO residual `ΔI` with shield, domain randomisation, and held-out scenari
 Expected ordering to test:
 
 $$
-\text{Open-loop} < \text{Greedy} < \text{DQN} \le \text{Analytic Smart Scan} \le \text{Smart Scan + RL residual}
+\text{Open-loop} < \text{Greedy} < \text{DQN} \le \text{Analytic Eklavya} \le \text{Eklavya + RL residual}
 $$
 
-**Gate:** shielded Smart Scan+RL ≥ analytic Smart Scan on every family, and any improvement holds on held-out families.
+**Gate:** shielded Eklavya+RL ≥ analytic Eklavya on every family, and any improvement holds on held-out families.
 
 ### Phase 7 — External validation, ablations, report
 - **Turing validation:** stream-once cache of `val_*` / `test_*`. Replay all policies on stare truth. Statistically cross-validate the simulated open-loop sweep against Turing Scan-Mode intercept statistics.
-- **Ablations:** no prediction · prediction without IG · flat vs. learned priors · no association (per-band model) · no undiscovered-cell hazard · no dither · no expanded hypothesis bank · analytic Smart Scan · Smart Scan + RL.
+- **Ablations:** no prediction · prediction without IG · flat vs. learned priors · no association (per-band model) · no undiscovered-cell hazard · no dither · no expanded hypothesis bank · analytic Eklavya · Eklavya + RL.
 - **Report:**
  - Attribute the improvement to specific components.
- - Include the Farey/Diophantine analysis of optimal periodic interception, and whether Smart Scan approaches it.
+ - Include the Farey/Diophantine analysis of optimal periodic interception, and whether Eklavya approaches it.
  - Map 1:1 to the problem statement's figures of merit.
 
 ---
@@ -280,7 +280,7 @@ $$
 ## Verification
 
 1. **Analytic cross-check:** simulated intercept-time statistics match Self (1985) and Clarkson synchronisation ratios for a single periodic emitter against a periodic sweep.
-2. **Lock-out:** raster TTFI = ∞ on `lockout-exact` and slow-beat on `lockout-near`; Smart Scan TTFI is finite and short on both.
+2. **Lock-out:** raster TTFI = ∞ on `lockout-exact` and slow-beat on `lockout-near`; Eklavya TTFI is finite and short on both.
 3. **Receiver model:** the simulated Turing schedule reproduces the 2.15 s / ±500 MHz acceptance behaviour (already verified on the dataset at 99.987 %).
 4. **Replay determinism:** same policy + truth + seed ⇒ bit-identical metrics.
 5. **Predictor unit tests:**
@@ -289,7 +289,7 @@ $$
  - the IG closed form matches Monte-Carlo mutual information
 6. **Association:** purity / V-measure on simulated shared-band scenarios.
 7. **Calibration:** reliability diagrams and Brier score for `p_e(t)`.
-8. **Shield:** Smart Scan+RL never falls below the analytic policy by more than the margin on any seed.
+8. **Shield:** Eklavya+RL never falls below the analytic policy by more than the margin on any seed.
 9. **Statistics:** headline numbers over ≥ 30 seeds with bootstrap CIs; no claims on overlapping intervals.
 10. **End to end:** `python experiments/run_sweep.py --config configs/experiment_full.yaml` regenerates every figure in `reports/`.
 

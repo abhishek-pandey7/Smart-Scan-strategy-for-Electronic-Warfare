@@ -18,7 +18,7 @@ from primes.data.turing import available_configs
 from primes.policies.dqn import DEFAULT_MODEL
 
 SIM_SCENARIOS = ["easy", "lockout", "popup", "dense", "mixed"]
-SMART_SCAN_SCENARIOS = ["lockout", "easy", "mixed"]
+EKLAVYA_SCENARIOS = ["lockout", "easy", "mixed"]
 
 
 def main() -> None:
@@ -37,9 +37,9 @@ def main() -> None:
         print(f"warming {sc} ...", flush=True)
         payload = create_run(RunRequest(scenario=sc))
         print(f"  id={payload['id']} policies={list(payload['runs'])}", flush=True)
-    # /how-it-decides and /smart-scan request Smart Scan on its own
-    for sc in SMART_SCAN_SCENARIOS:
-        print(f"warming {sc} (Smart Scan only) ...", flush=True)
+    # /how-it-decides and /eklavya request Eklavya on its own
+    for sc in EKLAVYA_SCENARIOS:
+        print(f"warming {sc} (Eklavya only) ...", flush=True)
         payload = create_run(RunRequest(scenario=sc, policies=["primes"]))
         print(f"  id={payload['id']}", flush=True)
     print("done", flush=True)

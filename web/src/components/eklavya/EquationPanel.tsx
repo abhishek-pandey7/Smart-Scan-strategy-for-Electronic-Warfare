@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import type { Explanation, PolicyRun, Scenario } from "@/lib/api";
 import { EXTEND_MS, LAMBDA, MAX_EXTENSIONS, SEARCH_THRESHOLD, W_NEW, modeColor, type Mode } from "@/components/explain/modes";
 import { DITHER, DWELLS_MS, TAU_MS, fmt, ghz, lastCatch, plug, type FlashIndex, type NextFlash } from "./derive";
-import s from "./smartscan.module.css";
+import s from "./eklavya.module.css";
 
 const C = { E: "var(--mode-track)", D: "var(--mode-search)", G: "var(--mode-extend)" } as const;
 

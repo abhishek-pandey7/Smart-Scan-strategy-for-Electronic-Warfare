@@ -1,4 +1,4 @@
-# Smart Scan demo: click path for the video
+# Eklavya demo: click path for the video
 
 Target length: about 4 minutes. Record at 1920x1080, browser zoom 100%, light mode.
 
@@ -13,20 +13,20 @@ Target length: about 4 minutes. Record at 1920x1080, browser zoom 100%, light mo
 ## 1. Overview (`/`), about 40 s
 
 - **Say:** "Radars flash for milliseconds, and a receiver can only listen to one slice of spectrum at a time. So every look is a bet."
-- **Point at the hero graphic:** in the top panel, the fixed sweep misses most flashes. In the bottom panel, Smart Scan searches briefly, then sits on each radar's predicted flash.
+- **Point at the hero graphic:** in the top panel, the fixed sweep misses most flashes. In the bottom panel, Eklavya searches briefly, then sits on each radar's predicted flash.
 - **Scroll to "Why scanning is hard":** read the third card, "A fixed sweep gets locked out". This sets up the mission.
-- **Scroll to "The lineup":** Smart Scan (learned models), Double-DQN (reinforcement learning), Greedy, Raster and Random (classical), and Oracle (reference, upper bound). "All six run against the same radars."
+- **Scroll to "The lineup":** Eklavya (learned models), Double-DQN (reinforcement learning), Greedy, Raster and Random (classical), and Oracle (reference, upper bound). "All six run against the same radars."
 - Click **Run the mission**.
 
 ## 2. Mission (`/mission`), about 90 s
 
 - Pick the **Lock-out** card. **Say:** "Four of these six radars rotate in step with the fixed sweep, so their flashes always land between its visits."
 - Click **Run all receivers** (it's cached, so it returns instantly).
-- **Live race (leaderboard):** let it play. Smart Scan pulls ahead early. Raster stays near zero.
-- **Where each receiver listened (spectrum grid):** point at the Raster lane, where the diagonal sweep lines keep missing the grey flash marks. Then point at the Smart Scan lane, where its dots line up on each radar's frequency.
-- **Cumulative flashes caught:** Oracle is the dashed line (the ceiling). Point at the gap between Smart Scan and everyone else.
+- **Live race (leaderboard):** let it play. Eklavya pulls ahead early. Raster stays near zero.
+- **Where each receiver listened (spectrum grid):** point at the Raster lane, where the diagonal sweep lines keep missing the grey flash marks. Then point at the Eklavya lane, where its dots line up on each radar's frequency.
+- **Cumulative flashes caught:** Oracle is the dashed line (the ceiling). Point at the gap between Eklavya and everyone else.
 - **What it decided just now:** pause the playbar and read the mode badge (Searching / Tracking / Extending), the frequency, the dwell and the three score bars.
-- **Who wins what:** read the winner badges and the scorecard. Seed-0 Lock-out numbers for flashes caught: Smart Scan 50%, Double-DQN 18%, Greedy 7%, Random 4%, Raster under 1%, Oracle 99% (reference, so it is left out of the winner badges).
+- **Who wins what:** read the winner badges and the scorecard. Seed-0 Lock-out numbers for flashes caught: Eklavya 50%, Double-DQN 18%, Greedy 7%, Random 4%, Raster under 1%, Oracle 99% (reference, so it is left out of the winner badges).
 - Click **How it decides →**. This opens the same run.
 
 ## 3. How it decides (`/how-it-decides`), about 70 s
@@ -41,7 +41,7 @@ Target length: about 4 minutes. Record at 1920x1080, browser zoom 100%, light mo
 
 - **Say:** "One run is an anecdote. This is many seeds per scenario with 95% confidence intervals."
 - **Winner strip:** toggle **This scenario / Overall**.
-- Click the scenario tabs (Lock-out, then Dense), keeping the metric on **Flashes intercepted**. Smart Scan is highlighted in the interval plot.
+- Click the scenario tabs (Lock-out, then Dense), keeping the metric on **Flashes intercepted**. Eklavya is highlighted in the interval plot.
 - Optionally open **Ablations** to show that removing the learned priors or the information-gain term costs performance.
 - Close: "Learn the rhythm, predict the flash, listen where it pays."
 
