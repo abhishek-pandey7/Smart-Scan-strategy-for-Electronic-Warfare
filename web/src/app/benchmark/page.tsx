@@ -2,213 +2,151 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { Badge, Card, Legend, SectionHeader } from "@/components/ui";
-import {
-  IntervalPlot, WinnerStrip, METRICS, GROUP_LABEL, GROUP_ORDER, MAIN_POLICIES,
-  isAblation, sortPolicies, type MetricId,
-} from "@/components/benchmark";
-import { type Benchmark, getBenchmark, policyLabel } from "@/lib/api";
+import { type Benchmark, getBenchmark, policyColor, policyLabel } from "@/lib/api";
+
+const METRICS = [
+  { id: "interception_ratio", label: "Flashes intercepted", max: 1, fmt: (v: number) => `${(v * 100).toFixed(1)}%`, higher: true },
+  { id: "discovery_fraction", label: "Emitters discovered", max: 1, fmt: (v: number) => `${(v * 100).toFixed(0)}%`, higher: true },
+  { id: "ttfi_mean_s", label: "Mean time to first intercept", max: null, fmt: (v: number) => `${v.toFixed(1)} s`, higher: false },
+  { id: "prediction_correct_pct", label: "Next-flash predictions correct", max: 100, fmt: (v: number) => `${v.toFixed(0)}%`, higher: true },
+] as const;
+
+const GROUP_LABEL: Record<string, string> = {
+  easy: "Easy", lockout: "Lock-out", popup: "Pop-up", dense: "Dense (40 emitters)", mixed: "Mixed periodic + intermittent",
+  turing: "Turing dataset (real scenarios)",
+};
+// The six the demo narrates. Ablations stay available behind a toggle so nothing is lost.
+const MAIN_POLICIES = ["oracle", "primes", "dqn", "greedy", "raster", "random"];
+const ABLATIONS = ["primes_no_micro", "primes_flat", "primes_no_ig", "primes_fprior"];
+const POLICY_ORDER = ["oracle", "primes", ...ABLATIONS, "dqn", "greedy", "raster", "random"];
+
+type MetricId = (typeof METRICS)[number]["id"];
+
+function IntervalPlot({ bench, group, metric, policies }:
+  { bench: Benchmark; group: string; metric: (typeof METRICS)[number]; policies: string[] }) {
+  const rows = bench.summary
+    .filter((e) => e.group === group && e[metric.id] && policies.includes(e.policy))
+    .sort((a, b) => POLICY_ORDER.indexOf(a.policy) - POLICY_ORDER.indexOf(b.policy));
+  const [hover, setHover] = useState<string | null>(null);
+  const max = metric.max ?? Math.max(...rows.map((r) => r[metric.id]!.ci95[1]), 1) * 1.05;
+  const W = 520, rowH = 30, left = 168, right = 74, top = 8;
+  const H = top + rows.length * rowH + 20;
+  const x = (v: number) => left + (v / max) * (W - left - right);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" role="img" aria-label={`${metric.label}, ${GROUP_LABEL[group] ?? group}`}>
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+        <g key={f}>
+          <line x1={x(f * max)} x2={x(f * max)} y1={top} y2={H - 18} stroke="var(--grid)" />
+          <text x={x(f * max)} y={H - 4} textAnchor="middle" fontSize={10} fill="var(--text-muted)">{metric.fmt(f * max)}</text>
+        </g>
+      ))}
+      {rows.map((r, i) => {
+        const s = r[metric.id]!;
+        const y = top + i * rowH + rowH / 2;
+        const active = hover === r.policy;
+        return (
+          <g key={r.policy} onMouseEnter={() => setHover(r.policy)} onMouseLeave={() => setHover(null)}>
+            <rect x={0} y={y - rowH / 2} width={W} height={rowH} fill={active ? "var(--surface-2)" : "transparent"} />
+            <text x={left - 10} y={y} textAnchor="end" dominantBaseline="middle" fontSize={13}
+              fill={r.policy === "primes" ? "var(--text-primary)" : "var(--text-secondary)"} fontWeight={r.policy === "primes" ? 600 : 400}>
+              {policyLabel(r.policy)}
+            </text>
+            <line x1={x(s.ci95[0])} x2={x(s.ci95[1])} y1={y} y2={y} stroke={policyColor(r.policy)} strokeWidth={2} strokeLinecap="round" />
+            <circle cx={x(s.mean)} cy={y} r={5} fill={policyColor(r.policy)} stroke="var(--surface-1)" strokeWidth={2} />
+            <text x={W - right + 8} y={y} dominantBaseline="middle" fontSize={13} fill="var(--text-primary)"
+              style={{ fontVariantNumeric: "tabular-nums" }}>
+              {metric.fmt(s.mean)}
+            </text>
+            {active && (
+              <text x={x(s.mean)} y={y - 9} textAnchor="middle" fontSize={10} fill="var(--text-secondary)">
+                95% CI {metric.fmt(s.ci95[0])} – {metric.fmt(s.ci95[1])} · n = {s.n}
+              </text>
+            )}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
 
 export default function BenchmarkPage() {
   const [bench, setBench] = useState<Benchmark | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [metricId, setMetricId] = useState<MetricId>("interception_ratio");
-  const [picked, setGroup] = useState<string | null>(null);
   const [showTable, setShowTable] = useState(false);
   const [showAblations, setShowAblations] = useState(false);
-  const [winnerScope, setWinnerScope] = useState<"group" | "overall">("group");
 
-  useEffect(() => {
-    getBenchmark().then(setBench).catch((e) => setError(String(e)));
-  }, []);
-
+  useEffect(() => { getBenchmark().then(setBench).catch((e) => setError(String(e))); }, []);
   const metric = METRICS.find((m) => m.id === metricId)!;
-
+  const shown = showAblations ? POLICY_ORDER : MAIN_POLICIES;
   const groups = useMemo(() => {
     const g = Array.from(new Set(bench?.summary.map((e) => e.group) ?? []));
-    return g.sort((a, b) => {
-      const ai = GROUP_ORDER.indexOf(a), bi = GROUP_ORDER.indexOf(b);
-      if (ai < 0 && bi < 0) return a.localeCompare(b);
-      if (ai < 0) return 1;
-      if (bi < 0) return -1;
-      return ai - bi;
-    });
+    return g.sort((a, b) => Object.keys(GROUP_LABEL).indexOf(a) - Object.keys(GROUP_LABEL).indexOf(b));
   }, [bench]);
 
-  const group = picked && groups.includes(picked) ? picked : (groups[0] ?? null);
-
-  const policiesInGroup = useMemo(() => {
-    if (!bench || !group) return { main: [] as string[], ablations: [] as string[] };
-    const present = [...new Set(bench.summary.filter((e) => e.group === group).map((e) => e.policy))];
-    const main = MAIN_POLICIES.filter((p) => present.includes(p));
-    const ablations = sortPolicies(present.filter(isAblation), false);
-    return { main, ablations };
-  }, [bench, group]);
-
   return (
-    <div className="stack-lg">
-      <SectionHeader
-        as="h1"
-        eyebrow="Evidence"
-        title="Benchmark"
-        lede={<>Every scheduler replayed on identical truth across scenario families. Dots are means; lines are 95% bootstrap confidence intervals.{" "}Why the numbers are not 100%: <Link href="/accuracy">Accuracy</Link>.</>}
-      />
-
-      {error && <p className="notice error">{error}</p>}
-
-      {bench && group && (
+    <>
+      <h1>Benchmark</h1>
+      <p className="sub">
+        Every scheduler replayed on identical truth. Dots are means, lines are 95% bootstrap confidence intervals.
+        {" "}Why the numbers are not 100%, and where the missing flashes go: <Link href="/accuracy">Accuracy</Link>.
+      </p>
+      {error && <p className="notice">{error}</p>}
+      {bench && (
         <>
-          <div className="meta-row">
-            <div className="segmented" role="group" aria-label="Winner scope">
-              <button type="button" aria-pressed={winnerScope === "group"} onClick={() => setWinnerScope("group")}>
-                This scenario
-              </button>
-              <button type="button" aria-pressed={winnerScope === "overall"} onClick={() => setWinnerScope("overall")}>
-                Overall
-              </button>
+          <div className="card controls">
+            <div className="field">
+              <label htmlFor="metric">Metric</label>
+              <select id="metric" value={metricId} onChange={(e) => setMetricId(e.target.value as MetricId)}>
+                {METRICS.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+              </select>
             </div>
-            <span className="muted small">
-              {bench.config.seeds} seeds per simulated family · {bench.config.turing.length} Turing scenarios · generated {bench.generated}
+            <button className="btn ghost" onClick={() => setShowTable(!showTable)}>{showTable ? "Show charts" : "Show table"}</button>
+            <button className="btn ghost" aria-pressed={showAblations} onClick={() => setShowAblations(!showAblations)}>
+              {showAblations ? "Hide ablations" : "Show ablations"}
+            </button>
+            <span className="muted">
+              {shown.length} schedulers · {bench.config.seeds} seeds per simulated family · {bench.config.turing.length} Turing scenarios
+              {metric.higher ? " · higher is better" : " · lower is better"}
             </span>
           </div>
 
-          <WinnerStrip
-            bench={bench}
-            group={winnerScope === "group" ? group : null}
-            groups={groups}
-          />
-
-          <Card
-            title="Compare"
-            subtitle={metric.higher ? "Higher is better" : "Lower is better"}
-            actions={
-              <button type="button" className="btn ghost" onClick={() => setShowTable(!showTable)}>
-                {showTable ? "Show charts" : "Show table"}
-              </button>
-            }
-          >
-            <div className="controls" style={{ marginBottom: 16 }}>
-              <div className="field">
-                <label htmlFor="metric">Metric</label>
-                <select id="metric" value={metricId} onChange={(e) => setMetricId(e.target.value as MetricId)}>
-                  {METRICS.map((m) => (
-                    <option key={m.id} value={m.id}>{m.label}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="field" style={{ flex: 1, minWidth: 0 }}>
-                <label id="scenario-tabs-label">Scenario</label>
-                <div className="segmented" role="tablist" aria-labelledby="scenario-tabs-label" style={{ flexWrap: "wrap" }}>
-                  {groups.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      role="tab"
-                      aria-selected={group === g}
-                      onClick={() => setGroup(g)}
-                    >
-                      {GROUP_LABEL[g] ?? g}
-                    </button>
-                  ))}
+          {!showTable ? (
+            <div className="grid-2">
+              {groups.map((g) => (
+                <div className="card" key={g}>
+                  <h2>{GROUP_LABEL[g] ?? g}</h2>
+                  <IntervalPlot bench={bench} group={g} metric={metric} policies={shown} />
                 </div>
-              </div>
+              ))}
             </div>
-
-            {!showTable ? (
-              <div className="stack">
-                <Legend policies={policiesInGroup.main} shape="line" />
-                <IntervalPlot
-                  bench={bench}
-                  group={group}
-                  metric={metric}
-                  policies={policiesInGroup.main}
-                />
-
-                {policiesInGroup.ablations.length > 0 && (
-                  <details
-                    className="disclosure"
-                    open={showAblations}
-                    onToggle={(e) => setShowAblations((e.target as HTMLDetailsElement).open)}
-                  >
-                    <summary>
-                      Ablations
-                      <Badge tone="outline">{policiesInGroup.ablations.length}</Badge>
-                      <span className="muted">
-                        Smart Scan variants that turn individual components off
-                      </span>
-                    </summary>
-                    <div className="stack" style={{ marginTop: 14 }}>
-                      <Legend policies={policiesInGroup.ablations} shape="line" />
-                      <IntervalPlot
-                        bench={bench}
-                        group={group}
-                        metric={metric}
-                        policies={policiesInGroup.ablations}
-                      />
-                    </div>
-                  </details>
-                )}
-              </div>
-            ) : (
-              <div style={{ overflowX: "auto" }}>
-                <table className="data">
-                  <thead>
-                    <tr>
-                      <th>Scenario</th>
-                      <th style={{ textAlign: "left" }}>Scheduler</th>
-                      {METRICS.map((m) => <th key={m.id}>{m.label}</th>)}
-                      <th>Runs</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {groups.flatMap((g) => {
-                      const present = [...new Set(bench.summary.filter((e) => e.group === g).map((e) => e.policy))];
-                      const ordered = [
-                        ...MAIN_POLICIES.filter((p) => present.includes(p)),
-                        ...sortPolicies(present.filter(isAblation), false),
-                      ];
-                      return ordered.map((policy) => {
-                        const e = bench.summary.find((row) => row.group === g && row.policy === policy);
-                        if (!e) return null;
-                        const ablation = isAblation(policy);
-                        return (
-                          <tr
-                            key={`${g}-${policy}`}
-                            className={policy === "primes" ? "highlight" : undefined}
-                            style={ablation ? { color: "var(--text-secondary)" } : undefined}
-                          >
-                            <td>{GROUP_LABEL[g] ?? g}</td>
-                            <td style={{ textAlign: "left" }}>
-                              {policyLabel(policy)}
-                              {ablation && (
-                                <span className="muted small" style={{ marginLeft: 8 }}>ablation</span>
-                              )}
-                            </td>
-                            {METRICS.map((m) => {
-                              const s = e[m.id];
-                              const stat = s && typeof s === "object" && "mean" in s ? s : null;
-                              return (
-                                <td key={m.id}>
-                                  {stat
-                                    ? `${m.fmt(stat.mean)} [${m.fmt(stat.ci95[0])}, ${m.fmt(stat.ci95[1])}]`
-                                    : "–"}
-                                </td>
-                              );
-                            })}
-                            <td>{e.n}</td>
-                          </tr>
-                        );
-                      });
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </Card>
+          ) : (
+            <div className="card" style={{ overflowX: "auto" }}>
+              <table className="data">
+                <thead>
+                  <tr><th>Scenario</th><th>Scheduler</th>{METRICS.map((m) => <th key={m.id}>{m.label}</th>)}<th>Runs</th></tr>
+                </thead>
+                <tbody>
+                  {groups.flatMap((g) => bench.summary
+                    .filter((e) => e.group === g && shown.includes(e.policy))
+                    .sort((a, b) => POLICY_ORDER.indexOf(a.policy) - POLICY_ORDER.indexOf(b.policy))
+                    .map((e) => (
+                      <tr key={`${g}-${e.policy}`} className={e.policy === "primes" ? "highlight" : ""}>
+                        <td>{GROUP_LABEL[g] ?? g}</td>
+                        <td style={{ textAlign: "left" }}>{policyLabel(e.policy)}</td>
+                        {METRICS.map((m) => {
+                          const s = e[m.id];
+                          return <td key={m.id}>{s ? `${m.fmt(s.mean)} [${m.fmt(s.ci95[0])}, ${m.fmt(s.ci95[1])}]` : "–"}</td>;
+                        })}
+                        <td>{e.n}</td>
+                      </tr>
+                    )))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </>
       )}
-
-      {!bench && !error && <p className="notice">Loading benchmark…</p>}
-    </div>
+    </>
   );
 }
