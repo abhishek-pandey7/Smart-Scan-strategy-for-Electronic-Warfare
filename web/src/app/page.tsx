@@ -187,4 +187,5 @@ export default function OverviewPage() {
         <Link href="/mission" className="btn btn-lg btn-arrow">Run the mission</Link>
       </section>
     </div>
-
+  );
+}
