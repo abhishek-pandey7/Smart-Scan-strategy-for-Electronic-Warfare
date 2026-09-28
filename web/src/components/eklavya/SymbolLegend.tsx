@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { DITHER_PCT, EXTEND_MS, LAMBDA, SEARCH_THRESHOLD, W_NEW } from "@/components/explain/modes";
 import { DWELLS_MS, STALE_S, TAU_MS } from "./derive";
-import s from "./smartscan.module.css";
+import s from "./eklavya.module.css";
 
 const ROWS: [ReactNode, ReactNode][] = [
   ["I(c,d)", "score = value per second of listening; highest wins"],

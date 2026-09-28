@@ -1,11 +1,11 @@
 """
-Generates a 5-slide Smart Scan pitch deck from the measured content already
-documented in docs/SMART_SCAN_FULL_ARCHITECTURE.md, PROGRESS.md and README.md.
+Generates a 5-slide Eklavya pitch deck from the measured content already
+documented in docs/EKLAVYA_FULL_ARCHITECTURE.md, PROGRESS.md and README.md.
 
 Run:
     python scripts/build_ppt.py
 Output:
-    Smart_Scan_5_Slide_Deck.pptx (repo root)
+    Eklavya_5_Slide_Deck.pptx (repo root)
 """
 
 from pptx import Presentation
@@ -127,7 +127,7 @@ def header(slide, kicker, title, slide_no):
     textbox(slide, Inches(12.4), Inches(0.1), Inches(0.7), Inches(0.4),
             f"{slide_no}/5", size=14, color=GREY, align=PP_ALIGN.RIGHT)
     textbox(slide, Inches(0.5), Inches(7.05), Inches(9), Inches(0.35),
-            "Smart Scan Strategy for Electronic Warfare", size=10, color=GREY)
+            "Eklavya Strategy for Electronic Warfare", size=10, color=GREY)
 
 
 def stat_card(slide, left, top, width, height, number, label, color=ACCENT):
@@ -178,7 +178,7 @@ set_bg(s)
 header(s, "Section 1", "Novelty & Key Features", 1)
 
 textbox(s, Inches(0.5), Inches(1.35), Inches(7.6), Inches(0.6),
-        "Smart Scan learns WHEN and WHERE to look in the spectrum — with no prior "
+        "Eklavya learns WHEN and WHERE to look in the spectrum — with no prior "
         "threat library — from its own hits and misses.", size=15, color=LIGHT, italic=True)
 
 left_items = [
@@ -281,7 +281,7 @@ set_bg(s)
 header(s, "Section 3", "Impact & Benefits", 3)
 
 stat_card(s, Inches(0.5), Inches(1.5), Inches(2.95), Inches(1.3), "4.2×", "more flashes intercepted vs.\nopen-loop sweep (real data)", color=ACCENT)
-stat_card(s, Inches(3.6), Inches(1.5), Inches(2.95), Inches(1.3), "69.8%", "Smart Scan interception on real\nTuring dataset scenarios", color=GOOD)
+stat_card(s, Inches(3.6), Inches(1.5), Inches(2.95), Inches(1.3), "69.8%", "Eklavya interception on real\nTuring dataset scenarios", color=GOOD)
 stat_card(s, Inches(6.7), Inches(1.5), Inches(2.95), Inches(1.3), "95%", "lock-out emitters discovered\n(raster: only 15%)", color=ACCENT2)
 stat_card(s, Inches(9.8), Inches(1.5), Inches(2.95), Inches(1.3), "3.2×", "faster time-to-first-catch\n(lock-out: 55.7s → 17.2s)", color=ACCENT)
 
@@ -292,7 +292,7 @@ data = [
     ["Open-loop raster", "16.8%"],
     ["Greedy bandit", "20.3%"],
     ["Double-DQN", "15.3%"],
-    ["Smart Scan", "69.8%"],
+    ["Eklavya", "69.8%"],
     ["Clairvoyant oracle (upper bound)", "84.8%"],
 ]
 add_table(s, Inches(0.5), Inches(3.4), Inches(6.5), Inches(2.9), data,
@@ -320,7 +320,7 @@ evidence = [
     "20 unit tests · 610-run multi-seed benchmark (95% bootstrap CIs)",
     "1,008-run robustness sweep across P_d / P_fa conditions",
     "Validated on 11 real Turing dataset scenarios, not just simulation",
-    "Smart Scan / oracle ratio stays 0.67–0.75 as detection probability drops 1.0→0.5",
+    "Eklavya / oracle ratio stays 0.67–0.75 as detection probability drops 1.0→0.5",
     "≤2-point interception loss up to ~23 false alarms/run",
 ]
 bullets(s, Inches(0.5), Inches(1.95), Inches(6.1), Inches(2.4), evidence, size=13.5)
@@ -367,7 +367,7 @@ rect(s, Inches(0.5), Inches(1.55), Inches(6.1), Inches(1.85), fill=DARK, radius=
 textbox(s, Inches(0.65), Inches(1.65), Inches(5.8), Inches(0.3), "PROJECT LINKS", size=13, color=ACCENT2, bold=True)
 link_items = [
     "Repo: github.com/abhishek-pandey7/Smart-Scan-strategy-for-Electronic-Warfare",
-    "Full architecture doc: docs/SMART_SCAN_FULL_ARCHITECTURE.md",
+    "Full architecture doc: docs/EKLAVYA_FULL_ARCHITECTURE.md",
     "Live demo (local): localhost:3000/mission?scenario=lockout",
 ]
 bullets(s, Inches(0.65), Inches(2.0), Inches(5.8), Inches(1.4), link_items, size=12, marker="•", space_after=6)
@@ -398,5 +398,5 @@ textbox(s, Inches(7.1), Inches(5.45), Inches(5.6), Inches(1.0),
         "Every figure in this deck is reproducible bit-for-bit from a seed — "
         "no number here is hand-picked.", size=12, color=ACCENT2, italic=True, bold=True)
 
-prs.save("Smart_Scan_5_Slide_Deck.pptx")
-print("Saved Smart_Scan_5_Slide_Deck.pptx")
+prs.save("Eklavya_5_Slide_Deck.pptx")
+print("Saved Eklavya_5_Slide_Deck.pptx")

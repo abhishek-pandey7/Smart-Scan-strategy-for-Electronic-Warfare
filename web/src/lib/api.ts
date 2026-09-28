@@ -114,7 +114,7 @@ export const getBenchmark = () => fetch("/api/benchmark").then((r) => asJson<Ben
 export const getAccuracy = () => fetch("/api/accuracy").then((r) => asJson<Accuracy>(r));
 export const getModels = () => fetch("/api/models").then((r) => asJson<ModelsPayload>(r));
 
-/** Smart Scan variants share the explanation and learned-track panels. */
+/** Eklavya variants share the explanation and learned-track panels. */
 export const isPrimes = (p: string) => p.startsWith("primes");
 
 export type PolicyFamily = "classical" | "learned" | "rl" | "reference";
@@ -123,20 +123,20 @@ export const FAMILY_LABEL: Record<PolicyFamily, string> = {
 };
 
 export const POLICY_LABEL: Record<string, string> = {
-  primes: "Smart Scan",
+  primes: "Eklavya",
   dqn: "Double-DQN",
   greedy: "Greedy bandit",
   raster: "Raster sweep",
   random: "Random",
   oracle: "Oracle",
-  primes_flat: "Smart Scan · flat prior",
-  primes_no_ig: "Smart Scan · no info gain",
-  primes_fprior: "Smart Scan · frequency prior",
-  primes_no_micro: "Smart Scan · no micro dwells",
-  primes_threat: "Smart Scan · threat weighted",
-  primes_exist: "Smart Scan · existence weighted",
+  primes_flat: "Eklavya · flat prior",
+  primes_no_ig: "Eklavya · no info gain",
+  primes_fprior: "Eklavya · frequency prior",
+  primes_no_micro: "Eklavya · no micro dwells",
+  primes_threat: "Eklavya · threat weighted",
+  primes_exist: "Eklavya · existence weighted",
 };
-export const policyLabel = (p: string) => POLICY_LABEL[p] ?? (p.startsWith("primes") ? "Smart Scan variant" : p);
+export const policyLabel = (p: string) => POLICY_LABEL[p] ?? (p.startsWith("primes") ? "Eklavya variant" : p);
 
 export const POLICY_FAMILY: Record<string, PolicyFamily> = {
   primes: "learned", dqn: "rl", greedy: "classical", raster: "classical", random: "classical", oracle: "reference",
@@ -152,12 +152,12 @@ export const POLICY_BLURB: Record<string, string> = {
   raster: "The traditional fixed sweep across the band. Predictable, so radars in step with it are never seen.",
   random: "Picks a random slice of spectrum every look. The floor any scheduler has to beat.",
   oracle: "Cheats: it sees the true radar schedule. Shows the best score that is physically possible.",
-  primes_flat: "Smart Scan without the priors learned from real data: it starts with no idea of typical periods.",
-  primes_no_ig: "Smart Scan without the information-gain term: it never looks just to learn timing.",
-  primes_fprior: "Smart Scan with search seeded by the learned frequency distribution.",
-  primes_no_micro: "Smart Scan without very short search looks.",
-  primes_threat: "Smart Scan that weights radars by their predicted threat level.",
-  primes_exist: "Smart Scan that down-weights tracks likely to be false alarms.",
+  primes_flat: "Eklavya without the priors learned from real data: it starts with no idea of typical periods.",
+  primes_no_ig: "Eklavya without the information-gain term: it never looks just to learn timing.",
+  primes_fprior: "Eklavya with search seeded by the learned frequency distribution.",
+  primes_no_micro: "Eklavya without very short search looks.",
+  primes_threat: "Eklavya that weights radars by their predicted threat level.",
+  primes_exist: "Eklavya that down-weights tracks likely to be false alarms.",
 };
 export const policyBlurb = (p: string) => POLICY_BLURB[p] ?? "";
 

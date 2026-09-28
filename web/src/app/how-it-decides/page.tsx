@@ -4,7 +4,7 @@ import HowItDecides from "@/components/explain/HowItDecides";
 
 export const metadata: Metadata = {
   title: "How it decides",
-  description: "Smart Scan's predict-then-score decision loop, replayed decision by decision, and the Double-DQN reinforcement learning comparator.",
+  description: "Eklavya's predict-then-score decision loop, replayed decision by decision, and the Double-DQN reinforcement learning comparator.",
 };
 
 export default function HowItDecidesPage() {

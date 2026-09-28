@@ -1,9 +1,9 @@
-# Smart Scan Strategy for Electronic Warfare
+# Eklavya Strategy for Electronic Warfare
 
 A machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on emitters.
 
-- Full design and PPT content: [`docs/SMART_SCAN_FULL_ARCHITECTURE.md`](docs/SMART_SCAN_FULL_ARCHITECTURE.md)
-- Prototype scope: [`docs/SMART_SCAN_PROTOTYPE.md`](docs/SMART_SCAN_PROTOTYPE.md)
+- Full design and PPT content: [`docs/EKLAVYA_FULL_ARCHITECTURE.md`](docs/EKLAVYA_FULL_ARCHITECTURE.md)
+- Prototype scope: [`docs/EKLAVYA_PROTOTYPE.md`](docs/EKLAVYA_PROTOTYPE.md)
 - Dataset findings: [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md)
 - Original plan: [`PLAN.md`](PLAN.md)
 
@@ -13,7 +13,7 @@ A machine-learning Electronic Support (ES) receiver scheduler. It learns when an
 |---|---|
 | Receiver model (Turing replica: 36 centres, ±500 MHz, 2.15 s raster), scenarios, pulse-level truth | `primes/env`, `primes/core` |
 | Learned emitter priors from 2,500 Turing training scenarios (HF API) | `primes/data/fit_priors.py` → `primes/assets/priors.json` |
-| **Smart Scan**: periodic + Gilbert–Elliott track models, undiscovered-emitter belief with learned visibility, value-per-time index with information gain | `primes/predict`, `primes/policies/primes_lite.py` |
+| **Eklavya**: periodic + Gilbert–Elliott track models, undiscovered-emitter belief with learned visibility, value-per-time index with information gain | `primes/predict`, `primes/policies/primes_lite.py` |
 | Baselines: raster, random, hit-rate bandit, clairvoyant oracle | `primes/policies/baselines.py` |
 | **Double-DQN** comparator (Stable-Baselines3) | `primes/rl` |
 | Exact replay, metrics, multi-seed benchmark with bootstrap CIs | `primes/eval`, `experiments/benchmark.py` |
@@ -45,7 +45,7 @@ cd web && npm install && npm run dev                   # http://localhost:3000
 Demo (mission page, all receivers at once):
 `http://localhost:3000/mission?scenario=lockout`
 
-Optional: point the Next.js rewrite at a non-default API with `SMARTSCAN_API_URL` (default `http://127.0.0.1:8000`).
+Optional: point the Next.js rewrite at a non-default API with `EKLAVYA_API_URL` (default `http://127.0.0.1:8000`).
 
 Turing scenarios (`turing:<config>`) are fetched from Hugging Face on first use and need accepted access plus `huggingface-cli login`. They are stored under `data/raw/` (git-ignored).
 
