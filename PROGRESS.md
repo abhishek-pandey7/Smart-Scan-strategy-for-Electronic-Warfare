@@ -1,4 +1,4 @@
-# PRIMES — Progress
+# Smart Scan — Progress
 
 _Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 1,008-run robustness sweep)_
 
@@ -9,13 +9,13 @@ _Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 
 | Research, design, dataset analysis | ✅ done |
 | Learned emitter priors from Turing data | ✅ done |
 | Simulator, receiver model, baselines, replay, metrics | ✅ done, tested |
-| PRIMES-lite scheduler (the ML core) | ✅ working, tested; beats every rival on every scenario family with non-overlapping CIs |
+| Smart Scan scheduler (the ML core) | ✅ working, tested; beats every rival on every scenario family with non-overlapping CIs |
 | Double-DQN comparator | ✅ trained and evaluated on held-out seeds (fair rival, on par with the greedy bandit) |
 | FastAPI backend | ✅ working |
 | Next.js frontend (replay + benchmark pages) | ✅ working, both pages verified |
 | Multi-seed benchmark with confidence intervals | ✅ done: 610 runs incl. ablations, `artifacts/benchmark.json` |
-| Solution document (ideation, technical approach, feasibility, impact, references) | ✅ `docs/PRIMES_FULL_ARCHITECTURE.md` |
-| Frontend head-to-head banner (live "N× more" factor) | ✅ done |
+| Solution document (ideation, technical approach, feasibility, impact, references) | ✅ `docs/SMART_SCAN_FULL_ARCHITECTURE.md` |
+| Frontend comparative lineup (all receivers at once) | ✅ done |
 | Threat-aware scheduling (taxonomy, classifier, metrics, variant) | ✅ measured; variant `primes_threat`, off by default |
 | Robustness sweep (P_d, P_fa) | ✅ 1,008 runs, `artifacts/robustness.json` |
 | Realistic association (own deinterleaving from unlabelled PDWs) | ✅ `primes_pdw`: −0.8 points mean, none on real scenarios |
@@ -24,8 +24,8 @@ _Last updated: 2026-09-17 (threat-aware priority; false alarms as new emitters; 
 
 | What | Location |
 |---|---|
-| Full solution / PPT content (4 architecture views) | `docs/PRIMES_FULL_ARCHITECTURE.md` |
-| Prototype scope doc | `docs/PRIMES_PROTOTYPE.md` |
+| Full solution / PPT content (4 architecture views) | `docs/SMART_SCAN_FULL_ARCHITECTURE.md` |
+| Prototype scope doc | `docs/SMART_SCAN_PROTOTYPE.md` |
 | Dataset findings | `docs/DATASET_NOTES.md` |
 | What the accuracy numbers mean, where points are lost, how to raise them | `docs/ACCURACY.md` |
 | Benchmark results (evidence) | `artifacts/benchmark.json`, shown on the web benchmark page |
@@ -40,7 +40,7 @@ Code branches are stacked, each built on the previous one. `feature/web` also co
 main
  ├─ docs/architecture-and-prototype   (merged into feature/web)
  └─ feature/prototype-core            receiver, scenarios, Turing loader, baselines, replay, metrics
-     └─ feature/primes-lite           learned priors, PRIMES-lite scheduler, tests
+     └─ feature/primes-lite           learned priors, Smart Scan scheduler, tests
          └─ feature/dqn               Gym environment, Double-DQN comparator
              └─ feature/api           FastAPI backend, benchmark script
                  └─ feature/web       Next.js frontend, docs, benchmark results, README, this file
@@ -53,23 +53,23 @@ main
 
 ### 1. Dataset analysis (Turing Synthetic Radar Dataset)
 - **Receiver model:** reverse-engineered the scan-mode receiver. 36 dwell centres, **±500 MHz acceptance** (adjacent dwells overlap 50 %), a fixed **2.15 s** cycle. It explains **99.987 %** of 22.7 M pulses.
-- **Priors:** fitted from **2,500 training scenarios (128,252 emitters)** by streaming metadata over the HF API. **96.2 % of scan periods fall on just 22 discrete values**, so after a single catch PRIMES checks about 19 likely return times instead of a continuous range.
+- **Priors:** fitted from **2,500 training scenarios (128,252 emitters)** by streaming metadata over the HF API. **96.2 % of scan periods fall on just 22 discrete values**, so after a single catch Smart Scan checks about 19 likely return times instead of a continuous range.
 - **Real visibility (important correction):** in stare-mode truth, emitters are visible a **median 32 % of the time**, in long intermittent stretches. Only **12 %** behave like short periodic main-beam flashes. The "~14 ms flash every ~4 s" figure comes from metadata (beamwidth × period), not from observed pulses.
 - **Open-loop raster**, replayed on 11 real scenarios, intercepts ~6 % of narrow flashes (≥ 3 pulses) and 11.5 % of all gap-split flashes.
 
 ### 2. Prototype core (`primes/`)
 - **Receiver:** Turing replica with n-min-pulse detection, P_d, P_fa and measured frequency.
 - **Scenario families:**
-  - `easy`
-  - `lockout` (exact and near-commensurate with the raster)
-  - `popup`
-  - `dense` (sampled from learned priors)
-  - `mixed` (periodic + intermittent)
-  - real `turing:<config>`
+ - `easy`
+ - `lockout` (exact and near-commensurate with the raster)
+ - `popup`
+ - `dense` (sampled from learned priors)
+ - `mixed` (periodic + intermittent)
+ - real `turing:<config>`
 - **Baselines:** raster (exact Turing schedule), random, hit-rate bandit, clairvoyant oracle.
 - **Evaluation:** exact pulse-level replay and all figures of merit, including interception ratio, discovery, time to first intercept, pop-up latency, % correct predictions, intercept-time error and false alarms.
 
-### 3. PRIMES-lite scheduler
+### 3. Smart Scan scheduler
 - **Periodic track model per emitter:** candidates from the learned discrete prior after one hit; weighted least-squares refit from hit differences after two. Misses eliminate phase intervals (interval-censored evidence).
 - **Gilbert–Elliott on/off model** per emitter, competing with the periodic model through Bayes factors. This handles the real data's intermittent visibility.
 - **Undiscovered-emitter belief** per 250 MHz cell, with a pop-up hazard and an **online-learned visibility factor κ**. It adapts when real emitters are far more visible than the metadata prior suggests.
@@ -78,26 +78,24 @@ main
 - **20 unit tests pass:** period recovery, sub-harmonic elimination, Markov learning, lock-out breaking, beating raster.
 
 ### 4. Double-DQN comparator (`primes/rl/`)
-- **Setup:** Gymnasium environment (validated), model-free features, reward matching PRIMES' objective, SB3 DQN with Double-Q targets.
+- **Setup:** Gymnasium environment (validated), model-free features, reward matching Smart Scan's objective, SB3 DQN with Double-Q targets.
 - **First run:** collapsed to a near-constant policy (unfair strawman), so it was discarded.
 - **Second run:** fixed 25 ms band selection, 5-step returns, 600k steps, best-on-validation checkpoint (validation reward 199). On held-out seeds it performs on par with the greedy bandit (e.g. 20.7 % on `dense`) and is kept as the ML rival.
 
 ### 5. Backend and frontend
-- **API (`api/main.py`):** `/api/catalog`, `POST /api/runs` (replay + disk cache), `/api/runs/{id}`, `/api/benchmark`.
-- **Web, mission replay page:**
-  - scenario and scheduler pickers, stat tiles and playback
-  - spectrum-time canvas per scheduler
-  - intercept and discovery timelines
-  - "Why PRIMES looked there" decision panel
-  - learned-track table (estimated vs true period)
-  - shareable auto-run links
-- **Web, benchmark page:** interval plots with 95 % confidence intervals, plus a table.
+- **API (`api/main.py`):** `/api/catalog`, `POST /api/runs` (replay + disk cache), `/api/runs/{id}`, `/api/benchmark`, `/api/models`.
+- **Web, mission page (`/mission`):**
+  - scenario cards; run-all lineup (Smart Scan, Double-DQN, Greedy bandit, Raster, Random, Oracle reference)
+  - live leaderboard race and spectrum small-multiples
+  - cumulative flashes chart and comparative results
+  - Smart Scan decision strip and learned-track table
+- **Web, how-it-decides and benchmark pages:** decision pipeline / RL comparator; interval plots with 95 % confidence intervals.
 
 ## Benchmark results (610 runs: 10 seeds × 5 simulated families + 11 real Turing scenarios, 95 % bootstrap CIs)
 
 Flash interception ratio, mean (higher is better). Full table with CIs: web benchmark page or `artifacts/benchmark.json`.
 
-| Scenario | Raster (open-loop) | Greedy bandit | Double-DQN | **PRIMES** | Oracle (upper bound) |
+| Scenario | Raster (open-loop) | Greedy bandit | Double-DQN | **Smart Scan** | Oracle (upper bound) |
 |---|---|---|---|---|---|
 | easy | 5.6 % | 14.4 % | 4.4 % | **72.3 %** | 96.1 % |
 | lock-out | 1.0 % | 7.6 % | 5.8 % | **69.1 %** | 98.3 % |
@@ -106,11 +104,11 @@ Flash interception ratio, mean (higher is better). Full table with CIs: web benc
 | mixed periodic + intermittent | 14.1 % | 17.2 % | 10.3 % | **78.8 %** | 94.3 % |
 | **Turing dataset (real)** | 16.8 % | 20.3 % | 15.3 % | **69.8 %** | 84.8 % |
 
-PRIMES' 95 % intervals do not overlap any non-oracle rival's on any scenario family. On real data PRIMES catches **4.2×** the flashes of the open-loop sweep and reaches **82 %** of what a clairvoyant scheduler achieves.
+Smart Scan's 95 % intervals do not overlap any non-oracle rival's on any scenario family. On real data Smart Scan catches **4.2×** the flashes of the open-loop sweep and reaches **82 %** of what a clairvoyant scheduler achieves.
 
 Other metrics:
 
-| Scenario | Emitters discovered: raster → PRIMES | Mean time to first intercept: raster → PRIMES | Flashes caught once tracked (PRIMES) | Next-flash predictions correct |
+| Scenario | Emitters discovered: raster → Smart Scan | Mean time to first intercept: raster → Smart Scan | Flashes caught once tracked (Smart Scan) | Next-flash predictions correct |
 |---|---|---|---|---|
 | easy | 68 % → 93 % | 36.9 s → 16.6 s | 94.7 % | 91 % |
 | lock-out | 15 % → 95 % | 55.7 s → 17.2 s | 91.0 % | 98 % |
@@ -119,7 +117,7 @@ Other metrics:
 | mixed | 87 % → 86 % | 18.9 s → 17.7 s | 88.5 % | 92 % |
 | Turing (real) | 93 % → 93 % | 9.7 s → 9.3 s | 73.6 % | 6 % (few flash-like emitters; see caveats) |
 
-**Where the remaining losses are:** on simulated scenarios most of the gap to the oracle is flashes that occur *before* a blind search first finds their emitter; once tracked, PRIMES catches 85–96 % of an emitter's flashes. On real data only ~5 % is lost to search; tracked capture is ~74 % vs the oracle's ~85 %, which is receiver contention (dozens of emitters visible at once) plus the oracle's foresight. The on/off model itself is well calibrated (predicted 0.39 vs observed 0.37, bin by bin).
+**Where the remaining losses are:** on simulated scenarios most of the gap to the oracle is flashes that occur *before* a blind search first finds their emitter; once tracked, Smart Scan catches 85–96 % of an emitter's flashes. On real data only ~5 % is lost to search; tracked capture is ~74 % vs the oracle's ~85 %, which is receiver contention (dozens of emitters visible at once) plus the oracle's foresight. The on/off model itself is well calibrated (predicted 0.39 vs observed 0.37, bin by bin).
 
 **Ablations (what produces the gain), from this benchmark:**
 - **Micro dwell controller** (5 ms search looks, extend on partial pulses, stop on confirmation, reliable-dwell rule): easy 65.5 % → 72.3 %, lock-out 60.2 % → 69.1 %, pop-up 57.9 % → 61.6 %; neutral on dense, mixed and Turing. Time to first catch on easy 25.3 s → 16.6 s, lock-out 24.2 s → 17.2 s.
@@ -131,14 +129,14 @@ Other metrics:
 
 **Ideas tried and rejected (measured, then reverted or left off):**
 - **Search seeded with the learned frequency distribution** (78 % of emitters sit in 12 of 72 frequency cells). Worse on every scenario: Turing 64.5 % → 57.7 %, mixed 79.1 % → 47.7 %, easy 65.5 % → 34.6 %. Within a 30–60 s engagement it over-concentrates search on the busy bands and starves the rest. Kept as the `primes_fprior` ablation, off by default.
-- **Faster revisits (0.25–0.5 s) for intermittent emitters.** PRIMES camps on already-visible emitters instead of searching: Turing 74 % → 56 %, dense 70 % → 52 % on tuning scenarios. Rejected; the knob exists, default unchanged.
+- **Faster revisits (0.25–0.5 s) for intermittent emitters.** Smart Scan camps on already-visible emitters instead of searching: Turing 74 % → 56 %, dense 70 % → 52 % on tuning scenarios. Rejected; the knob exists, default unchanged.
 - **Lowering the undiscovered-emitter count by one per discovery.** Statistically invalid for a Poisson count, and measured worse (easy 65.5 % → 57.6 %). Reverted.
 
 - **Shorter search dwells (5 ms, 3 ms), with a realistic 0.5 ms retune time.** Helps periodic scenarios (lock-out 60 % → 64 %, all emitters found more often) but hurts intermittent ones (mixed 80 % → 49 %) because a very short look is an unreliable test of a bursty emitter. Net: 65.9 % → 57.4 % mean on tuning scenarios (5 seeds). Left off; `dwells_s` is configurable.
 - **Online per-dwell detection calibration** (observed vs predicted detections, per dwell length). No measurable effect at 5 seeds (65.6 % vs 65.9 %); an apparent +1.6 points at 3 seeds was noise. Left off (`calibrate_dwells`).
 - Kept from that round: the on/off model now ignores dwells too short to hold the 3 pulses a detection needs (principled; no measurable change at the default dwell lengths), and the benchmark now reports **acquisition loss** and **tracked-flash capture** separately.
 
-**Where PRIMES does not win:** on `dense` raster discovers slightly *more* emitters (76 % vs 70 %) at about the same time-to-first-intercept; PRIMES trades a little breadth of search for 6.7× the flashes intercepted there. On real data discovery is now equal (93 % vs 93 %). `w_new` moves along this trade-off.
+**Where Smart Scan does not win:** on `dense` raster discovers slightly *more* emitters (76 % vs 70 %) at about the same time-to-first-intercept; Smart Scan trades a little breadth of search for 6.7× the flashes intercepted there. On real data discovery is now equal (93 % vs 93 %). `w_new` moves along this trade-off.
 
 ## Threat-aware scheduling
 
@@ -147,9 +145,9 @@ Other metrics:
 - **Real tuning scenarios:** high-threat interception **69.7 % → 77.6 %**; first catch of a high-threat radar **9.8 → 7.7 s**; overall interception 73.0 → 75.1 %.
 - **Simulated tuning scenarios:** overall interception mixed 79.4 → 69.0 %, lockout 75.6 → 67.5 %, easy 61.6 → 65.7 %. Because of this it is a mission profile, not the default.
 
-## Robustness (1,008 runs: 7 conditions × raster / greedy / PRIMES / oracle × 25 simulated + 11 real scenarios)
+## Robustness (1,008 runs: 7 conditions × raster / greedy / Smart Scan / oracle × 25 simulated + 11 real scenarios)
 
-| Condition | Raster | Greedy | **PRIMES** (95 % CI) | Oracle | PRIMES / oracle | PRIMES on real scenarios |
+| Condition | Raster | Greedy | **Smart Scan** (95 % CI) | Oracle | Smart Scan / oracle | Smart Scan on real scenarios |
 |---|---|---|---|---|---|---|
 | nominal (P_d = 1, P_fa = 0) | 10.3 % | 16.1 % | **69.0 %** [65.5, 72.1] | 91.6 % | 0.75 | 69.8 % |
 | P_d = 0.9 | 9.6 % | 15.9 % | **62.7 %** [58.9, 66.1] | 87.4 % | 0.72 | 62.1 % |
@@ -185,14 +183,14 @@ Truth labels are still used for scoring (was the emitter physically intercepted)
 3. **Information gain adds nothing**, and removing it looks slightly better; decide on tuning scenarios, then either drop it or keep it as an ablated component. Do not claim it as a source of gain.
 4. **Association:** the default `primes` still uses labelled pulses so the 610-run benchmark stays comparable; `primes_pdw` deinterleaves for itself and costs 0.8 points on tuning scenarios. To be included in the next full benchmark.
 5. **Prediction accuracy** is scored only on flash-like emitters. On real Turing data there are few (4–6 per scenario), so that metric is thin there.
-6. **Runtime:** PRIMES takes tens of seconds to a few minutes per 30 s Turing scenario in Python (the micro controller makes more, shorter decisions). Fine for replay and demo (results are cached); not real-time yet: a porting task.
+6. **Runtime:** Smart Scan takes tens of seconds to a few minutes per 30 s Turing scenario in Python (the micro controller makes more, shorter decisions). Fine for replay and demo (results are cached); not real-time yet: a porting task.
 7. **Simulator realism:** simulated flash emitters are idealised compared with Turing visibility. The `mixed` family and the Turing replays cover the gap.
 
 ## Next steps
 
 1. Open one PR from `feature/accuracy` into `main` (it contains everything since the last merge) and merge.
 2. Put the benchmark numbers and the ablation findings on the slides; the benchmark page screenshots well.
-3. Optional improvements: tune `w_new` / `λ` on training seeds (Optuna); vectorise PRIMES across tracks for speed; stronger DQN; real deinterleaving instead of ideal association.
+3. Optional improvements: tune `w_new` / `λ` on training seeds (Optuna); vectorise Smart Scan across tracks for speed; stronger DQN; real deinterleaving instead of ideal association.
 
 ## How to run
 

@@ -16,6 +16,21 @@ def _r(x, nd=4):
     return None if x is None else round(float(x), nd)
 
 
+def _sig(v, digits=4):
+    """Round every float in a nested explanation to `digits` significant digits; integral floats become ints."""
+    if isinstance(v, dict):
+        return {k: (x if k == "t" else _sig(x, digits)) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_sig(x, digits) for x in v]
+    if isinstance(v, (float, np.floating)):
+        v = float(v)
+        if not np.isfinite(v):
+            return None
+        r = float(f"{v:.{digits}g}")
+        return int(r) if r.is_integer() else r
+    return v
+
+
 def scenario_payload(truth: Truth) -> dict:
     flashes = []
     for e, fl in truth.flashes.items():
@@ -69,7 +84,6 @@ def trace_payload(trace: Trace, truth: Truth) -> dict:
         predictions.append({"t": _r(t_now), "emitter": e, "predicted": _r(pred),
                             "actual": _r(nxt[0]) if len(nxt) else None})
 
-    step = max(1, len(trace.explanations) // 1500)
     return {
         "policy": trace.policy,
         "metrics": {k: v for k, v in metrics.items() if not k.startswith("_")},
@@ -81,5 +95,5 @@ def trace_payload(trace: Trace, truth: Truth) -> dict:
         # for self-deinterleaved runs: track id -> [truth emitter owning most of its pulses, share of pulses]
         "owners": {str(tid): [e, _r(share, 3)] for tid, (e, share) in owners.items()},
         "predictions": predictions,
-        "explanations": [ex for _, ex in trace.explanations[::step]],
+        "explanations": [_sig(ex) for _, ex in trace.explanations],
     }

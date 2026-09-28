@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 
-const API = process.env.PRIMES_API_URL ?? "http://127.0.0.1:8000";
+const API = process.env.SMARTSCAN_API_URL ?? "http://127.0.0.1:8000";
 
 const nextConfig: NextConfig = {
   // Allow opening the dev server as 127.0.0.1 as well as localhost (demo machines, headless checks).
@@ -10,7 +10,7 @@ const nextConfig: NextConfig = {
     return [{ source: "/api/:path*", destination: `${API}/api/:path*` }];
   },
   experimental: {
-    // A PRIMES replay on a large Turing scenario can take ~1 minute on first request.
+    // A Smart Scan replay on a large Turing scenario can take ~1 minute on first request.
     proxyTimeout: 600_000,
   },
 };
