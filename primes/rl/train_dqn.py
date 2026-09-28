@@ -42,7 +42,7 @@ def main() -> None:
                       exploration_fraction=0.3, exploration_initial_eps=1.0, exploration_final_eps=0.05,
                       policy_kwargs={"net_arch": [256, 256]}, seed=args.seed, verbose=1, device="cpu")
     callback = EvalCallback(val_env, n_eval_episodes=10, eval_freq=25_000, deterministic=True,
-                            best_model_save_path=str(best_dir), verbose=1)
+                            best_model_save_path=str(best_dir), log_path=str(out.parent), verbose=1)
     model.learn(total_timesteps=args.steps, log_interval=20, callback=callback)
 
     out.parent.mkdir(parents=True, exist_ok=True)
