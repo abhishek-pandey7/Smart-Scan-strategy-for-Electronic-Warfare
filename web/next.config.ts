@@ -16,7 +16,7 @@ const nextConfig: NextConfig = {
       return [{ source: "/api/:path*", destination: `${API}/api/:path*` }];
     },
     experimental: {
-      // An Eklavya replay on a large Turing scenario can take ~1 minute on first request.
+      // An Ekalavya replay on a large Turing scenario can take ~1 minute on first request.
       proxyTimeout: 600_000,
     },
   }),

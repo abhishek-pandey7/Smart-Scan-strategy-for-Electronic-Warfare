@@ -14,7 +14,7 @@
   --border: #e9e1d3;
   --border-strong: #d5cab7;
 
-  /* Eklavya accent: deep ink blue, reads cleanly against the warm glows */
+  /* Ekalavya accent: deep ink blue, reads cleanly against the warm glows */
   --accent: #2c46d0;
   --accent-strong: #1f33a3;
   --accent-soft: #eaedfb;
@@ -43,7 +43,7 @@
   --glass: color-mix(in srgb, var(--surface-1) 72%, transparent);
   --glass-border: color-mix(in srgb, var(--border-strong) 55%, transparent);
 
-  /* one fixed colour per policy; Eklavya is the accent */
+  /* one fixed colour per policy; Ekalavya is the accent */
   --series-primes: var(--accent);
   --series-dqn: #8a3fc8;
   --series-greedy: #c98700;
@@ -68,7 +68,7 @@
   --series-7: var(--series-oracle);
   --series-8: var(--series-primes_no_ig);
 
-  /* modes of the Eklavya scheduler */
+  /* modes of the Ekalavya scheduler */
   --mode-search: #8f897e;
   --mode-track: var(--accent);
   --mode-extend: #0f9483;

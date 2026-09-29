@@ -61,11 +61,11 @@ export default function HowItDecides() {
     <div className="stack-lg">
       <div>
         <SectionHeader as="h1" eyebrow="How it decides" title="Predict, then score every look"
-          lede="Every few milliseconds Eklavya asks one question: of all the places and durations it could listen next, which buys the most per second? It answers with explicit models of each radar, not a black box." />
+          lede="Every few milliseconds Ekalavya asks one question: of all the places and durations it could listen next, which buys the most per second? It answers with explicit models of each radar, not a black box." />
         <div className={s.callout} style={{ marginTop: 24 }}>
           <Card variant="tint">
             <h3>One score, not many algorithms</h3>
-            <p>Eklavya is a single predict-then-score loop. It does not switch between algorithms: Search, Track and Extend are labels for what the same score picked.</p>
+            <p>Ekalavya is a single predict-then-score loop. It does not switch between algorithms: Search, Track and Extend are labels for what the same score picked.</p>
           </Card>
           <Card variant="tint">
             <h3>Models where physics is known</h3>
@@ -91,7 +91,7 @@ export default function HowItDecides() {
               actions={runId ? undefined : <ScenarioPicker value={scenario} onChange={pickScenario} />} />
             {!current && (
               <div className="notice">
-                Replaying Eklavya on the {SCENARIOS.find((x) => x.id === scenario)?.label ?? scenario} scenario.
+                Replaying Ekalavya on the {SCENARIOS.find((x) => x.id === scenario)?.label ?? scenario} scenario.
                 The first replay takes up to a minute; after that it is cached.
               </div>
             )}
@@ -103,7 +103,7 @@ export default function HowItDecides() {
             )}
             {current?.data && !run && (
               <div className="notice">
-                This run has no Eklavya lane. <Link href={pathname} className="link-arrow">Load the demo run</Link>
+                This run has no Ekalavya lane. <Link href={pathname} className="link-arrow">Load the demo run</Link>
               </div>
             )}
           </section>
@@ -127,7 +127,7 @@ export default function HowItDecides() {
             <Card title="Training curve" subtitle="How the comparator improved during training">
               {models ? <DqnCurve curve={models.dqn_curve} /> : <div className="notice">{modelsError ? "Unavailable." : "Loading…"}</div>}
             </Card>
-            <Card title="Eklavya vs Double-DQN" subtitle="Same receiver, same reward, different ways of deciding">
+            <Card title="Ekalavya vs Double-DQN" subtitle="Same receiver, same reward, different ways of deciding">
               <RlComparison />
             </Card>
           </div>
@@ -178,7 +178,7 @@ function Replay({ run, payload, scenario, onScenario }: {
 
       <section className="stack">
         <SectionHeader eyebrow="Live replay" title="Watch it decide"
-          lede={`${briefing(payload.request.scenario).title}. Every one of Eklavya's ${ex.length.toLocaleString()} decisions, with the numbers behind it.`}
+          lede={`${briefing(payload.request.scenario).title}. Every one of Ekalavya's ${ex.length.toLocaleString()} decisions, with the numbers behind it.`}
           actions={scenario ? <ScenarioPicker value={scenario} onChange={onScenario} /> : undefined} />
         <PlayBar {...pb.bind} />
         <div className="hstack" style={{ gap: 8 }}>
@@ -189,7 +189,7 @@ function Replay({ run, payload, scenario, onScenario }: {
             </button>
           ))}
         </div>
-        <Card title="Mode over time" subtitle="Click or drag to move the cursor. The line below counts how many emitters Eklavya is tracking.">
+        <Card title="Mode over time" subtitle="Click or drag to move the cursor. The line below counts how many emitters Ekalavya is tracking.">
           <ModeTimeline explanations={ex} horizon={payload.scenario.horizon_s} cursor={pb.cursor} onSeek={(t) => { pb.setPlaying(false); pb.setCursor(t); }} />
         </Card>
         <div className="grid-2">

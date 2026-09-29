@@ -74,9 +74,9 @@ function HeroArt() {
         <span className="hero-art-title">Same {T} seconds, two receivers</span>
         <Badge tone="outline">illustration</Badge>
       </div>
-      <svg viewBox="0 0 600 262" role="img" aria-label="Illustration: the same radar flashes seen by a fixed sweep and by Eklavya">
+      <svg viewBox="0 0 600 262" role="img" aria-label="Illustration: the same radar flashes seen by a fixed sweep and by Ekalavya">
         <Panel y={0} name="Fixed sweep" color={policyColor("raster")} looks={RASTER} />
-        <Panel y={128} name="Eklavya" color={policyColor("primes")} looks={SMART} />
+        <Panel y={128} name="Ekalavya" color={policyColor("primes")} looks={SMART} />
         <text x={132} y={254} fontSize={12} fill="var(--text-muted)">time</text>
         <text x={588} y={254} fontSize={12} fill="var(--text-muted)" textAnchor="end">
           4 radars on 4 frequency slices · shaded = where the receiver listened
@@ -133,7 +133,7 @@ export default function OverviewPage() {
           <h1 className="display">A receiver that learns <span className="accent-text">when and where</span> to listen.</h1>
           <p className="lede">
             Radars show up for milliseconds at a time, and a receiver can only tune to one slice of spectrum at once.
-            Eklavya learns each radar&apos;s rhythm from what it hears, predicts the next flash, and spends its
+            Ekalavya learns each radar&apos;s rhythm from what it hears, predicts the next flash, and spends its
             listening time where it will catch the most.
           </p>
           <div className="hstack">

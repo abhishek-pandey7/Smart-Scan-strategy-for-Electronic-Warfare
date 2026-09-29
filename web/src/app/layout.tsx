@@ -20,21 +20,21 @@ export const metadata: Metadata = {
   // Absolute URLs for og:image et al. are built from this; without it a relative
   // image is a build error and link previews come out blank.
   metadataBase: new URL("https://eklavya-e5l.pages.dev"),
-  title: { default: "Eklavya", template: "%s · Eklavya" },
+  title: { default: "Ekalavya", template: "%s · Ekalavya" },
   description: DESCRIPTION,
-  applicationName: "Eklavya",
+  applicationName: "Ekalavya",
   openGraph: {
     type: "website",
-    siteName: "Eklavya",
-    title: "Eklavya",
+    siteName: "Ekalavya",
+    title: "Ekalavya",
     description: DESCRIPTION,
     url: "/",
     images: [{ url: "/og.png", width: 1200, height: 630, type: "image/png",
-               alt: "Eklavya: 69.8% of flashes caught, against 16.8% for a fixed sweep" }],
+               alt: "Ekalavya: 69.8% of flashes caught, against 16.8% for a fixed sweep" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "Eklavya",
+    title: "Ekalavya",
     description: DESCRIPTION,
     images: ["/og.png"],
   },
@@ -68,7 +68,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       <body>
         <header className="topbar">
           <div className="topbar-inner">
-            <Link href="/" className="brand"><BrandMark id="brand-glow-top" />Eklavya<small>for electronic support receivers</small></Link>
+            <Link href="/" className="brand"><BrandMark id="brand-glow-top" />Ekalavya<small>for electronic support receivers</small></Link>
             <Nav />
           </div>
         </header>
@@ -76,7 +76,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
         <footer className="site-footer">
           <div className="site-footer-inner">
             <div>
-              <Link href="/" className="brand"><BrandMark id="brand-glow-foot" />Eklavya</Link>
+              <Link href="/" className="brand"><BrandMark id="brand-glow-foot" />Ekalavya</Link>
               <p className="site-footer-tag">
                 A receiver scheduler that learns each radar&apos;s rhythm and spends its listening time where the next flash will be.
               </p>

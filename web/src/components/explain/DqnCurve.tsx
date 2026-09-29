@@ -95,7 +95,7 @@ const ROWS: [string, string, string][] = [
 export function RlComparison() {
   return (
     <table className={s.compare}>
-      <thead><tr><th /><th>Eklavya</th><th>Double-DQN</th></tr></thead>
+      <thead><tr><th /><th>Ekalavya</th><th>Double-DQN</th></tr></thead>
       <tbody>
         {ROWS.map(([k, a, b]) => <tr key={k}><td>{k}</td><td>{a}</td><td>{b}</td></tr>)}
       </tbody>

@@ -44,7 +44,7 @@ export default function EklavyaLab() {
     <div className={s.page}>
       <header className={s.top}>
         <div>
-          <div className="eyebrow">Eklavya</div>
+          <div className="eyebrow">Ekalavya</div>
           <h1 className={s.title}>The math behind every look</h1>
         </div>
         <div className="segmented" role="group" aria-label="Scenario">
@@ -57,8 +57,8 @@ export default function EklavyaLab() {
       {payload && run ? <Lab key={scenario} payload={payload} run={run} />
         : loaded && "error" in loaded ? (
           <div className="notice error">Replay failed: {loaded.error} <button type="button" className="btn secondary" onClick={retry}>Retry</button></div>
-        ) : payload ? <div className="notice">No Eklavya lane in this run.</div>
-        : <div className="notice">Replaying Eklavya on {SCENARIOS.find((x) => x.id === scenario)?.label}… (first run up to a minute, then cached)</div>}
+        ) : payload ? <div className="notice">No Ekalavya lane in this run.</div>
+        : <div className="notice">Replaying Ekalavya on {SCENARIOS.find((x) => x.id === scenario)?.label}… (first run up to a minute, then cached)</div>}
     </div>
   );
 }

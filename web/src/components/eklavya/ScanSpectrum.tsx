@@ -177,7 +177,7 @@ export default function ScanSpectrum({ scenario, run, fx, cursor, windowS, decis
       <canvas ref={canvas} style={{ width, height }} className={s.canvas}
         onPointerDown={(e) => { e.currentTarget.setPointerCapture(e.pointerId); seek(e); }}
         onPointerMove={(e) => { if (e.buttons) seek(e); }}
-        role="img" aria-label={`Eklavya looks and radar flashes from ${t0.toFixed(1)} to ${t1.toFixed(1)} s`} />
+        role="img" aria-label={`Ekalavya looks and radar flashes from ${t0.toFixed(1)} to ${t1.toFixed(1)} s`} />
     </div>
   );
 }

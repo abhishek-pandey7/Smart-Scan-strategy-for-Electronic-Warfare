@@ -1,4 +1,4 @@
-"""Eklavya backend API.
+"""Ekalavya backend API.
 
     uvicorn api.main:app --reload --port 8000
 """
@@ -33,7 +33,7 @@ PRIORS_PATH = ROOT / "primes" / "assets" / "priors.json"
 THREAT_PATH = ROOT / "primes" / "assets" / "threat_model.joblib"
 EVAL_NPZ = ROOT / "artifacts" / "models" / "evaluations.npz"
 
-app = FastAPI(title="Eklavya API", version="0.1.0")
+app = FastAPI(title="Ekalavya API", version="0.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
                    allow_methods=["*"], allow_headers=["*"])
 app.add_middleware(GZipMiddleware, minimum_size=4096)
@@ -127,7 +127,7 @@ def models() -> dict:
             },
             {
                 "id": "eklavya",
-                "name": "Eklavya",
+                "name": "Ekalavya",
                 "kind": "scheduler",
                 "description": (
                     "Predict-then-score scheduler with live Search / Track / Extend mode switching "

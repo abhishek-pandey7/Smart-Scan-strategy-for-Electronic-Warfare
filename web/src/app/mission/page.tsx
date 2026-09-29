@@ -220,7 +220,7 @@ export default function MissionPage() {
           {eklavya && (
             <section className="stack">
               <SectionHeader
-                eyebrow="Eklavya"
+                eyebrow="Ekalavya"
                 title="What it decided just now"
                 lede="Mode, frequency, dwell, and score terms at the playhead. Synced to the simulator above."
                 actions={
@@ -336,7 +336,7 @@ function BoardStats({ data, cursor }: { data: RunPayload; cursor: number }) {
       {oracle !== null && (
         <div className={styles.stat}>
           <div className={styles.statValue}>{oracle > 0 ? `${Math.round((100 * ours) / oracle)}%` : "–"}</div>
-          <div className={styles.statLabel}>of Oracle&apos;s flashes caught by Eklavya</div>
+          <div className={styles.statLabel}>of Oracle&apos;s flashes caught by Ekalavya</div>
         </div>
       )}
       {rival && lead !== null && (
@@ -344,7 +344,7 @@ function BoardStats({ data, cursor }: { data: RunPayload; cursor: number }) {
           <div className={styles.statValue} style={{ color: lead > 0 ? "var(--good)" : lead < 0 ? "var(--critical)" : undefined }}>
             {lead > 0 ? `+${lead}` : lead}
           </div>
-          <div className={styles.statLabel}>Eklavya lead over {policyLabel(rival.p)}</div>
+          <div className={styles.statLabel}>Ekalavya lead over {policyLabel(rival.p)}</div>
         </div>
       )}
     </div>
