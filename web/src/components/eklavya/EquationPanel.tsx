@@ -3,10 +3,15 @@
 import type { ReactNode } from "react";
 import type { Explanation, PolicyRun } from "@/lib/api";
 import { EXTEND_MS, LAMBDA, SEARCH_THRESHOLD, W_NEW, modeColor, type Mode } from "@/components/explain/modes";
-import { DWELLS_MS, TAU_MS, fmt, ghz, lastCatch, plug, type FlashIndex } from "./derive";
+import { DITHER, DWELLS_MS, TAU_MS, fmt, ghz, lastCatch, plug, type FlashIndex } from "./derive";
 import s from "./eklavya.module.css";
 
 const C = { E: "var(--mode-track)", D: "var(--mode-search)", G: "var(--mode-extend)" } as const;
+
+const Sym = ({ k, children }: { k: keyof typeof C; children: ReactNode }) => (
+  <b className={s.sym} style={{ color: C[k] }}>{children}</b>
+);
+const Wn = () => <>W<sub>new</sub></>;
 
 const MODE_TITLE: Record<Mode, string> = {
   track: "Catching a known radar",
@@ -32,11 +37,14 @@ export default function EquationPanel({ ex, run, fx }: EquationPanelProps) {
 
   const p = plug(ex, W_NEW, LAMBDA);
   const extend = ex.mode === "extend";
+  // Search looks are ranked on a dithered index, so without this factor the printed
+  // number would not be the one the scheduler actually compared.
+  const showDither = ex.mode === "search" && Math.abs(p.dither - 1) > 1e-4;
   const tr = ex.track;
   const bars = [
-    { k: "E" as const, label: "Catch a known radar", v: p.E },
-    { k: "D" as const, label: "Find a new radar", v: p.wD },
-    { k: "G" as const, label: "Learn its timing", v: p.lG },
+    { k: "E" as const, label: "Catch a known radar", sym: <Sym k="E">E</Sym>, v: p.E },
+    { k: "D" as const, label: "Find a new radar", sym: <><Wn />·<Sym k="D">D</Sym></>, v: p.wD },
+    { k: "G" as const, label: "Learn its timing", sym: <>λ·<Sym k="G">G</Sym></>, v: p.lG },
   ];
 
   let why: ReactNode;
@@ -71,6 +79,26 @@ export default function EquationPanel({ ex, run, fx }: EquationPanelProps) {
             <span className={s.big}>{fmt(p.raw)}</span><span className={s.unit}>/s</span>
           </div>
         )}
+        {!extend && (
+          <>
+            <div className={s.symbolic}>
+              <span className={s.lhs}>I(c,d) =</span>
+              <Frac num={<><Sym k="E">E</Sym> + <Wn />·<Sym k="D">D</Sym> + λ·<Sym k="G">G</Sym></>} den={<>d + τ</>} />
+              {showDither && (
+                <>
+                  <span className={s.op}>× (1 + {DITHER}·j) =</span>
+                  <b className="mono">{fmt(p.index)}</b><span className={s.unit}>/s</span>
+                </>
+              )}
+            </div>
+            <p className={s.gloss}>
+              <Sym k="E">E</Sym> exploit · <Sym k="D">D</Sym> discovery · <Sym k="G">G</Sym> info gain ·
+              {" "}weights W<sub>new</sub> = {W_NEW.toFixed(1)}, λ = {LAMBDA} ·
+              {" "}d dwell, τ retune cost ({TAU_MS} ms in these replays)
+              {showDither && <> · j golden-ratio dither, search only</>}
+            </p>
+          </>
+        )}
       </div>
 
       <div className={s.bars} style={extend ? { opacity: 0.35 } : undefined}>
@@ -79,7 +107,7 @@ export default function EquationPanel({ ex, run, fx }: EquationPanelProps) {
           const share = p.value > 0 ? b.v / p.value : 0;
           return (
             <div key={b.k} className={s.barRow}>
-              <span className={s.barLabel}>{b.label}</span>
+              <span className={s.barLabel}>{b.label} <span className={s.barSym}>{b.sym}</span></span>
               <span className={s.barTrack}>
                 <span className={s.barFill} style={{ width: `${100 * share}%`, minWidth: b.v > 0 ? 3 : 0, background: C[b.k] }} />
               </span>
