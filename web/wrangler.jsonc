@@ -1,0 +1,11 @@
+{
+  // Static deployment of the exported Next.js site (see scripts/export_static.py).
+  // Build with: NEXT_PUBLIC_STATIC=1 npx next build   ->   out/
+  // Deploy with: npx wrangler deploy
+  "name": "eklavya",
+  "compatibility_date": "2026-09-29",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}

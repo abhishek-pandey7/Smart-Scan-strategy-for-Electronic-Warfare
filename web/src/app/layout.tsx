@@ -10,23 +10,54 @@ const serif = Newsreader({
   subsets: ["latin"], variable: "--font-serif", display: "swap", style: ["normal", "italic"], axes: ["opsz"],
 });
 
+// Chat apps cut the description at roughly 70 characters, so the result leads and the
+// explanation follows: truncation then costs context, not the point.
+const DESCRIPTION =
+  "Catches 69.8% of radar flashes where a fixed sweep catches 16.8%. "
+  + "An electronic-support receiver that learns when and where to listen.";
+
 export const metadata: Metadata = {
+  // Absolute URLs for og:image et al. are built from this; without it a relative
+  // image is a build error and link previews come out blank.
+  metadataBase: new URL("https://eklavya-e5l.pages.dev"),
   title: { default: "Eklavya", template: "%s · Eklavya" },
-  description: "A receiver scheduler that learns when and where to listen, so it catches radar flashes a fixed sweep misses.",
+  description: DESCRIPTION,
+  applicationName: "Eklavya",
+  openGraph: {
+    type: "website",
+    siteName: "Eklavya",
+    title: "Eklavya",
+    description: DESCRIPTION,
+    url: "/",
+    images: [{ url: "/og.png", width: 1200, height: 630, type: "image/png",
+               alt: "Eklavya: 69.8% of flashes caught, against 16.8% for a fixed sweep" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Eklavya",
+    description: DESCRIPTION,
+    images: ["/og.png"],
+  },
+  icons: {
+    icon: [{ url: "/icon.png", type: "image/png", sizes: "512x512" }],
+    apple: "/apple-touch-icon.png",
+  },
 };
 
+/** A drawn bow, arrow aimed at the flash it intercepts. Geometry mirrors scripts/make_brand.py. */
 function BrandMark({ id }: { id: string }) {
   return (
-    <svg className="brand-mark" viewBox="0 0 30 30" aria-hidden>
+    <svg className="brand-mark" viewBox="0 0 32 32" aria-hidden>
       <defs>
-        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#f3a052" />
-          <stop offset="1" stopColor="#c2581a" />
-        </linearGradient>
+        <clipPath id={id}><rect width={32} height={32} rx={9.5} /></clipPath>
       </defs>
-      <rect width={30} height={30} rx={9} fill="var(--text-primary)" />
-      <path d="M6 20c2.5 0 2.5-10 5-10s2.5 10 5 10 2.5-10 5-10 2.5 10 3 10" fill="none" stroke="var(--page)" strokeWidth={1.9} strokeLinecap="round" />
-      <circle cx={21} cy={10} r={2.9} fill={`url(#${id})`} stroke="var(--text-primary)" strokeWidth={1.2} />
+      <g clipPath={`url(#${id})`}>
+        <rect width={32} height={32} fill="var(--text-primary)" />
+        <path d="M11 5.5Q24 16 11 26.5" fill="none" stroke="var(--page)" strokeWidth={2.1} strokeLinecap="round" />
+        <path d="M11 5.5V26.5" fill="none" stroke="var(--page)" strokeWidth={1.3} strokeLinecap="round" opacity={0.55} />
+        <path d="M5.5 16H21" fill="none" stroke="var(--page)" strokeWidth={2.1} strokeLinecap="round" />
+        <circle cx={25} cy={16} r={3} fill="var(--accent)" />
+      </g>
     </svg>
   );
 }
