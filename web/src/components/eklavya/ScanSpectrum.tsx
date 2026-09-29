@@ -121,7 +121,7 @@ export default function ScanSpectrum({ scenario, run, fx, cursor, windowS, decis
       ctx.globalAlpha = 1; ctx.lineWidth = hot ? 2.5 : 1.5;
       ctx.beginPath(); ctx.arc(xN, y, hot ? 8 : 6, 0, Math.PI * 2); ctx.stroke();
       ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-      ctx.fillText(`t̂ #${nf.emitter}`, xN + 9, y - 4);
+      ctx.fillText(`next #${nf.emitter}`, xN + 9, y - 4);
     }
 
     const tr = decision?.track;
@@ -132,7 +132,7 @@ export default function ScanSpectrum({ scenario, run, fx, cursor, windowS, decis
         ctx.strokeStyle = c.track; ctx.fillStyle = c.track; ctx.lineWidth = 2.5;
         ctx.beginPath(); ctx.arc(xN, y, 8, 0, Math.PI * 2); ctx.stroke();
         ctx.textAlign = "left"; ctx.textBaseline = "bottom";
-        ctx.fillText(`t̂ #${tr.emitter}`, xN + 9, y - 4);
+        ctx.fillText(`next #${tr.emitter}`, xN + 9, y - 4);
       }
     }
 
@@ -156,7 +156,7 @@ export default function ScanSpectrum({ scenario, run, fx, cursor, windowS, decis
       ctx.textAlign = x > PAD.left + plotW - 150 ? "right" : "left";
       ctx.textBaseline = below ? "top" : "bottom";
       ctx.font = `600 12px ${c.font}`;
-      ctx.fillText(`c=${(decision.centre_mhz / 1000).toFixed(2)} GHz  d=${decision.dwell_ms} ms`,
+      ctx.fillText(`${(decision.centre_mhz / 1000).toFixed(2)} GHz · ${decision.dwell_ms} ms`,
         ctx.textAlign === "right" ? x + w : x, below ? yB + 4 : yT - 4);
     }
     ctx.restore();

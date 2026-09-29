@@ -7,7 +7,6 @@ import { usePlayback } from "@/lib/hooks";
 import EquationPanel from "./EquationPanel";
 import ScanSpectrum from "./ScanSpectrum";
 import SecondStrip from "./SecondStrip";
-import SymbolLegend from "./SymbolLegend";
 import { indexFlashes, nextFlashes, perSecond } from "./derive";
 import s from "./eklavya.module.css";
 
@@ -45,7 +44,8 @@ export default function EklavyaLab() {
       <header className={s.top}>
         <div>
           <div className="eyebrow">Ekalavya</div>
-          <h1 className={s.title}>The math behind every look</h1>
+          <h1 className={s.title}>How it decides where to listen</h1>
+          <p className={s.sub}>Every few milliseconds it scores each frequency and listen time, then picks the one that should catch the most radar flashes per second.</p>
         </div>
         <div className="segmented" role="group" aria-label="Scenario">
           {SCENARIOS.map((x) => (
@@ -118,37 +118,33 @@ function Lab({ payload, run }: { payload: RunPayload; run: PolicyRun }) {
         <section className={s.sim}>
           <div className={s.toolbar}>
             <div className={s.steps} role="group" aria-label="Step">
-              <button type="button" className={s.step} onClick={prevSecond} title="Shift + ←">−1 s</button>
-              <button type="button" className={s.step} onClick={prevDecision} title="←">‹ decision</button>
-              <button type="button" className={s.step} onClick={nextDecision} title="→">decision ›</button>
-              <button type="button" className={s.step} onClick={nextSecond} title="Shift + →">+1 s</button>
-              <button type="button" className={s.step} data-accent onClick={nextTrack} disabled={!hasTrack}>next TRACK ›</button>
+              <button type="button" className={s.step} onClick={prevDecision} title="←">‹ Previous decision</button>
+              <button type="button" className={s.step} onClick={nextDecision} title="→">Next decision ›</button>
+              <button type="button" className={s.step} data-accent onClick={nextTrack} disabled={!hasTrack}>Jump to next catch ›</button>
             </div>
-            <span className={s.toolMeta}>{scenario.emitters.length} radars · {run.looks.t.length.toLocaleString()} looks · {run.intercepts.length} caught</span>
-            <div className="segmented" role="group" aria-label="Time window">
+            <span className={s.toolMeta}>{scenario.emitters.length} radars · {run.intercepts.length} flashes caught</span>
+            <div className="segmented" role="group" aria-label="Zoom">
               {WINDOWS.map((w) => (
                 <button key={w} type="button" aria-pressed={w === windowS} onClick={() => setWindowS(w)}>{w} s</button>
               ))}
-              <button type="button" aria-pressed={windowS >= H} onClick={() => setWindowS(H)}>all</button>
+              <button type="button" aria-pressed={windowS >= H} onClick={() => setWindowS(H)}>All</button>
             </div>
           </div>
           <ScanSpectrum scenario={scenario} run={run} fx={fx} cursor={cursor} windowS={windowS}
             decision={decision} nexts={nexts} height={SPECTRUM_H} onSeek={seek} />
           <div className={s.keys}>
-            <span><i className={s.kLook} />look (c, d)</span>
-            <span><i className={s.kHit} />look that detected</span>
+            <span><i className={s.kLook} />where it listened</span>
             <span><i className={s.kFlash} />radar flash</span>
-            <span><i className={s.kAhead} />flash ahead</span>
+            <span><i className={s.kAhead} />upcoming flash</span>
             <span><i className={s.kCatch} />caught</span>
-            <span><i className={s.kPred} />t̂ predicted</span>
-            <span><i className={s.kDec} />current decision</span>
+            <span><i className={s.kPred} />predicted next flash</span>
+            <span><i className={s.kDec} />current look</span>
           </div>
           <PlayBar {...pb.bind} speeds={SPEEDS} />
         </section>
-        <EquationPanel ex={decision} run={run} scenario={scenario} fx={fx} nexts={nexts} />
+        <EquationPanel ex={decision} run={run} fx={fx} />
       </div>
       <SecondStrip cells={cells} cursor={cursor} onSeek={seek} />
-      <SymbolLegend />
     </>
   );
 }
