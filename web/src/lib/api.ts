@@ -82,9 +82,17 @@ export type Accuracy = {
   association: { note: string; groups: AssociationGroup[]; mean: { labelled: number; self_sorted: number } } | null;
 };
 
+/** Static builds (NEXT_PUBLIC_STATIC=1) read baked JSON instead of calling the Python API. */
+const STATIC = process.env.NEXT_PUBLIC_STATIC === "1";
+const endpoint = (name: string) => (STATIC ? `/api/${name}.json` : `/api/${name}`);
+
+/** Must match slug() in scripts/export_static.py. */
+const runSlug = (scenario: string, policies: string[]) =>
+  `${scenario.replace(/[^A-Za-z0-9]+/g, "-")}__${[...policies].sort().join("-")}`;
+
 let catalogPromise: Promise<Catalog> | null = null;
 export const getCatalog = () => {
-  catalogPromise ??= fetch("/api/catalog").then((r) => asJson<Catalog>(r)).catch((e) => { catalogPromise = null; throw e; });
+  catalogPromise ??= fetch(endpoint("catalog")).then((r) => asJson<Catalog>(r)).catch((e) => { catalogPromise = null; throw e; });
   return catalogPromise;
 };
 
@@ -103,6 +111,10 @@ export type RunRequest = { scenario: string; policies?: string[]; seed?: number;
 
 export const createRun = async ({ scenario, policies, seed = 0, p_d = 1 }: RunRequest) => {
   const list = policies ?? availableLineup(await getCatalog().catch(() => null));
+  if (STATIC) {
+    // Static hosting cannot serve POST; every offered run is baked at build time.
+    return asJson<RunPayload>(await fetch(`/api/runs/${runSlug(scenario, list)}.json`));
+  }
   const res = await fetch("/api/runs", {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ scenario, seed, policies: list, p_d }),
@@ -110,9 +122,9 @@ export const createRun = async ({ scenario, policies, seed = 0, p_d = 1 }: RunRe
   return asJson<RunPayload>(res);
 };
 
-export const getBenchmark = () => fetch("/api/benchmark").then((r) => asJson<Benchmark>(r));
-export const getAccuracy = () => fetch("/api/accuracy").then((r) => asJson<Accuracy>(r));
-export const getModels = () => fetch("/api/models").then((r) => asJson<ModelsPayload>(r));
+export const getBenchmark = () => fetch(endpoint("benchmark")).then((r) => asJson<Benchmark>(r));
+export const getAccuracy = () => fetch(endpoint("accuracy")).then((r) => asJson<Accuracy>(r));
+export const getModels = () => fetch(endpoint("models")).then((r) => asJson<ModelsPayload>(r));
 
 /** Eklavya variants share the explanation and learned-track panels. */
 export const isPrimes = (p: string) => p.startsWith("primes");
