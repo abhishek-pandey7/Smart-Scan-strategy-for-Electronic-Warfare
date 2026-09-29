@@ -420,7 +420,7 @@ Each radar type in the dataset has one parameter template, so the classifier beh
 | Risk | Likelihood | Mitigation |
 |---|---|---|
 | **Missed detections / false alarms** in a real front-end | Certain | Measured graceful degradation: P_d = 0.5 keeps 0.67 of oracle; ≤ 2-point loss at realistic false-alarm rates. The evidence model is P_d-aware |
-| **Real deinterleaving is imperfect** | High | Measured: with its own deinterleaving from unlabelled PDWs, PRIMES loses 0.8 points on average vs truth labels (72.7 % → 71.9 %), and none on real dataset scenarios. A learned deinterleaver can replace the rule-based one in L2 |
+| **Real deinterleaving is imperfect** | High | Measured: with its own deinterleaving from unlabelled PDWs, Ekalavya loses 0.8 points on average vs truth labels (72.7 % → 71.9 %), and none on real dataset scenarios. A learned deinterleaver can replace the rule-based one in L2 |
 | **Real-time budget on embedded hardware** | Medium | Bounded per-decision cost by design; ONNX/C++ port; hardware-in-the-loop test on an SDR |
 | **Domain gap between simulator and a specific platform** | Medium | Validated on an independent dataset already; simulator parameters are fitted, not invented; priors refit per theatre |
 | **Adversary exploits the learned behaviour** | Low–Medium | Staleness governor, dither, per-track time caps, evidence floors (§2.7) |

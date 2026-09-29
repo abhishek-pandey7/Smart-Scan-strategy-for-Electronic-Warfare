@@ -1,4 +1,4 @@
-# Understanding PRIMES accuracy
+# Understanding Ekalavya accuracy
 
 _Why the numbers are 60–80 % and not 100 %, where the missing points go, and what can recover them._
 
@@ -12,7 +12,7 @@ It is **not** "percent of decisions correct". The receiver hears about 1 GHz of 
 
 610-run benchmark: 10 seeds per simulated family plus 11 real dataset scenarios, with 95 % bootstrap CIs.
 
-| Scenario | Raster (current practice) | **PRIMES** | Clairvoyant oracle | PRIMES / oracle | PRIMES / raster |
+| Scenario | Raster (current practice) | **Ekalavya** | Clairvoyant oracle | Ekalavya / oracle | Ekalavya / raster |
 |---|---|---|---|---|---|
 | lockout | 1.0 % | **69.1 %** | 98.3 % | 0.70 | 69× |
 | easy | 5.6 % | **72.3 %** | 96.1 % | 0.75 | 13× |
@@ -22,13 +22,13 @@ It is **not** "percent of decisions correct". The receiver hears about 1 GHz of 
 | **real Turing scenarios** | 16.8 % | **69.8 %** | 84.8 % | **0.82** | 4.2× |
 
 - **The oracle is not an achievable target.** It is handed the truth, including the future, and still misses 2–15 % because flashes on different bands overlap in time.
-- **The honest comparison is PRIMES vs the oracle (0.63–0.84) and vs today's open-loop sweep (4–69×).**
+- **The honest comparison is Ekalavya vs the oracle (0.63–0.84) and vs today's open-loop sweep (4–69×).**
 
-## 3. Where PRIMES loses its points
+## 3. Where Ekalavya loses its points
 
 Every flash is exactly one of: caught, **lost before discovery** (the emitter had not been found yet), or **missed while tracking** (the emitter was known but the receiver was elsewhere). The three shares add to 100 % per run (served by `/api/accuracy`, shown on the web Accuracy page):
 
-| Scenario | PRIMES caught | Lost before discovery | Missed while tracking | Oracle: missed while tracking | PRIMES caught once tracked |
+| Scenario | Ekalavya caught | Lost before discovery | Missed while tracking | Oracle: missed while tracking | Ekalavya caught once tracked |
 |---|---|---|---|---|---|
 | lockout | 69 % | 25 % | 6 % | 2 % | 91 % |
 | easy | 72 % | 24 % | 4 % | 4 % | 95 % |
@@ -47,11 +47,11 @@ On a single narrowband receiver this is largely a **physical limit, not a tuning
 
 ### 3.2 Loss while tracking (the real room for improvement on real data)
 
-Once found, simulated rotating scanners are caught 85–96 % of the time, within a few points of the oracle. Real Turing emitters are caught 74 % vs the oracle's 85 %. That 11-point gap has a cause: only 12 % of real emitters behave like neat periodic scanners. Most are visible intermittently for seconds at a time (median 32 % visibility duty; `DATASET_NOTES.md`). PRIMES models those with an on/off belief that predicts less sharply than a flash timetable.
+Once found, simulated rotating scanners are caught 85–96 % of the time, within a few points of the oracle. Real Turing emitters are caught 74 % vs the oracle's 85 %. That 11-point gap has a cause: only 12 % of real emitters behave like neat periodic scanners. Most are visible intermittently for seconds at a time (median 32 % visibility duty; `DATASET_NOTES.md`). Ekalavya models those with an on/off belief that predicts less sharply than a flash timetable.
 
 ## 4. How accuracy holds up under realistic conditions
 
-| Condition | PRIMES (all 36 scenarios) | PRIMES / oracle |
+| Condition | Ekalavya (all 36 scenarios) | Ekalavya / oracle |
 |---|---|---|
 | nominal | 69.0 % | 0.75 |
 | missed detections, P_d = 0.7 | 55.5 % | 0.72 |
@@ -60,7 +60,7 @@ Once found, simulated rotating scanners are caught 85–96 % of the time, within
 | ~70 false alarms per run (stress) | 58.4 % | 0.64 |
 | own deinterleaving from unlabelled pulses (tuning scenarios) | −0.8 points vs labelled | — |
 
-Missed detections lower the oracle too (half of all flashes are unobservable at P_d = 0.5). PRIMES' share of the achievable stays at 0.67–0.75.
+Missed detections lower the oracle too (half of all flashes are unobservable at P_d = 0.5). Ekalavya's share of the achievable stays at 0.67–0.75.
 
 Note: the association comparison uses 3 tuning scenarios per family (disjoint from the benchmark). Its absolute values (e.g. easy 64.8 %) must not be compared with the benchmark table; only the labelled-vs-unlabelled difference is meaningful.
 
@@ -72,7 +72,7 @@ Note: the association comparison uses 3 tuning scenarios per family (disjoint fr
 | **Second receiver** (coordinated scheduling) | both phases | roughly halves search time; more tracking capacity | 7 |
 | **Joint parameter tuning** on tuning scenarios (w_new, staleness, λ) | balance between search and tracking | a few points, evenly spread | 8 |
 | **Look-ahead planning** (plan several dwells, not one) | tracking loss on intermittent real emitters (74 % vs 85 %) | closes part of the 11-point real-data gap | 9 |
-| **Residual RL with shield** | model mismatch on real emitters | learned corrections without ever falling below PRIMES | 10 |
+| **Residual RL with shield** | model mismatch on real emitters | learned corrections without ever falling below Ekalavya | 10 |
 
 What will **not** raise the numbers, measured and rejected: frequency-seeded search, faster revisits of intermittent emitters, plain shorter dwells, per-dwell calibration, and threat or existence weighting as defaults (`PROGRESS.md`).
 

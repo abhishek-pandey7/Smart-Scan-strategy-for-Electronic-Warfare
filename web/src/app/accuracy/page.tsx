@@ -46,7 +46,7 @@ export default function AccuracyPage() {
     <>
       <h1>Understanding the accuracy</h1>
       <p className="sub">
-        Why PRIMES scores 60–80% and not 100%, where the missing flashes go, and how the score holds up when conditions get worse.
+        Why Ekalavya scores 60–80% and not 100%, where the missing flashes go, and how the score holds up when conditions get worse.
       </p>
       {error && <p className="notice">{error}</p>}
 
@@ -149,11 +149,11 @@ export default function AccuracyPage() {
             <div className="explainer" style={{ marginTop: 12 }}>
               <div>
                 <strong>Simulated scenarios</strong>
-                <span className="muted">Most of PRIMES&apos; loss is before discovery. For a single narrowband receiver that is largely physics: nothing tells it where an unknown radar is. The oracle avoids it only because it already knows.</span>
+                <span className="muted">Most of Ekalavya&apos;s loss is before discovery. For a single narrowband receiver that is largely physics: nothing tells it where an unknown radar is. The oracle avoids it only because it already knows.</span>
               </div>
               <div>
                 <strong>Real dataset scenarios</strong>
-                <span className="muted">PRIMES finds almost every radar quickly. The loss is while tracking: most real radars are visible irregularly for seconds at a time, which is harder to predict than a clean rotation.</span>
+                <span className="muted">Ekalavya finds almost every radar quickly. The loss is while tracking: most real radars are visible irregularly for seconds at a time, which is harder to predict than a clean rotation.</span>
               </div>
               <div>
                 <strong>What can recover it</strong>
@@ -193,7 +193,7 @@ export default function AccuracyPage() {
             <div className="card">
               <h2>Without being told which pulse belongs to which radar</h2>
               <p className="sub" style={{ marginBottom: 10 }}>
-                A real receiver gets unlabelled pulses. &ldquo;Raw pulses&rdquo; mode makes PRIMES sort them itself, by bearing and frequency, before scheduling.
+                A real receiver gets unlabelled pulses. &ldquo;Raw pulses&rdquo; mode makes Ekalavya sort them itself, by bearing and frequency, before scheduling.
                 Comparison on tuning scenarios, separate from the benchmark.
               </p>
               <div style={{ overflowX: "auto" }}>
