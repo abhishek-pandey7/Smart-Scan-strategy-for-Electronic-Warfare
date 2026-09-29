@@ -19,7 +19,7 @@ const DESCRIPTION =
 export const metadata: Metadata = {
   // Absolute URLs for og:image et al. are built from this; without it a relative
   // image is a build error and link previews come out blank.
-  metadataBase: new URL("https://eklavya-e5l.pages.dev"),
+  metadataBase: new URL("https://ekalavya-arvada.pages.dev"),
   title: { default: "Ekalavya", template: "%s · Ekalavya" },
   description: DESCRIPTION,
   applicationName: "Ekalavya",
