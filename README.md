@@ -87,7 +87,6 @@ The export step is the only one that needs the Turing dataset and `artifacts/mod
 | [`docs/EKLAVYA_PROTOTYPE.md`](docs/EKLAVYA_PROTOTYPE.md) | Prototype scope |
 | [`docs/ACCURACY.md`](docs/ACCURACY.md) | Why the numbers are what they are, and what would raise them |
 | [`docs/DATASET_NOTES.md`](docs/DATASET_NOTES.md) | Findings from the Turing dataset |
-| [`docs/DEMO_SCRIPT.md`](docs/DEMO_SCRIPT.md) | Timed run-sheet for the demo video |
 | [`PLAN.md`](PLAN.md) | Original plan |
 
 ## Branching
