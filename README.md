@@ -2,11 +2,11 @@
   <a href="https://ekalavya-arvada.pages.dev">&#9654;&nbsp; Check out the demo here &nbsp;&#9664;</a>
 </h1>
 
-<p align="center">
-  <a href="https://ekalavya-arvada.pages.dev"><img alt="Launch the live demo" src="https://img.shields.io/badge/LIVE%20DEMO-ekalavya--arvada.pages.dev-2563EB?style=for-the-badge&labelColor=0B1220"></a>
-  &nbsp;
-  <a href="https://www.youtube.com/watch?v=L4syRxecqos"><img alt="Watch the demo video" src="https://img.shields.io/badge/WATCH%20THE%20VIDEO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white&labelColor=0B1220"></a>
-</p>
+<h3 align="center">
+  <a href="https://ekalavya-arvada.pages.dev">ekalavya-arvada.pages.dev</a>
+  &nbsp;·&nbsp;
+  <a href="https://www.youtube.com/watch?v=L4syRxecqos">Watch the demo video</a>
+</h3>
 
 <p align="center"><i>Six receivers, one spectrum, identical ground truth. Press play and watch which one hears the radars.</i></p>
 
