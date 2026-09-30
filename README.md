@@ -2,7 +2,9 @@
 
 A machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on the emitters it will face.
 
-**Live demo:** [ekalavya-arvada.pages.dev](https://ekalavya-arvada.pages.dev)
+**[Live demo](https://ekalavya-arvada.pages.dev)** · **[Demo video](https://www.youtube.com/watch?v=L4syRxecqos)**
+
+![The Ekalavya overview page](docs/images/overview.png)
 
 A narrowband receiver hears roughly 1 GHz of an 18 GHz spectrum at a time, and radar beams illuminate it for only milliseconds. Every dwell is therefore a bet on where the next flash will be. Ekalavya learns each emitter's rhythm from what it has already heard, predicts the next flash, and spends its listening time where the return is highest.
 
@@ -19,9 +21,35 @@ Interception ratio, the share of all interceptable flashes that the receiver cau
 | Mixed | 14.1 % | **78.8 %** | 94.3 % | 0.84 |
 | **Real Turing scenarios** | 16.8 % | **69.8 %** | 84.8 % | **0.82** |
 
-The oracle is handed the truth, including the future, and still misses between 2 % and 15 % because flashes on different bands overlap in time. It is a ceiling, not a target. The meaningful comparisons are against that ceiling (0.63 to 0.84) and against the open-loop sweep in service today (4x to 69x).
+The oracle is handed the truth, including the future, and still misses between 2 % and 15 % because flashes on different bands overlap in time. It is a ceiling, not a target. The meaningful comparisons are against that ceiling (0.63 to 0.84) and against the open-loop sweep in service today.
 
-Where the remaining points go, and how the numbers hold up under missed detections and false alarms, is set out in [`docs/ACCURACY.md`](docs/ACCURACY.md).
+![The benchmark page, every scenario with confidence intervals](docs/images/benchmark.png)
+
+## How a decision is made
+
+Every candidate pairing of band centre and dwell length receives a single score, which is value per second of listening:
+
+```
+I(c,d) = [ E(c,d) + W_new · D(c,d) + λ · G(c,d) ] / (d + τ)
+```
+
+`E` is the expected number of flashes caught from tracked emitters, `D` is discovery value over undiscovered ones, `G` is information gain about uncertain track phases, `d` is the dwell and `τ` is retune overhead. Dividing by time is what makes short confirmatory dwells and long search dwells directly comparable. The receiver takes the highest-scoring look, listens, and folds the outcome back into its belief, since a miss rules out phase hypotheses just as a hit confirms them.
+
+There is no neural network in the scheduler. The learning lives in the offline priors and the online Bayesian track models, which keeps every decision inspectable: the demo shows the three score terms behind the look actually taken, at any point in a replay.
+
+![A single tracking decision, with its score and the prediction behind it](docs/images/decision.png)
+
+## Every receiver on one scenario
+
+The full lineup replays identical ground truth, so any difference between them is attributable to the decision policy alone.
+
+![Six receivers replaying one real dataset scenario](docs/images/mission.png)
+
+## Where the missing flashes go
+
+Most of the loss happens before discovery, because nothing tells a single narrowband receiver where a radar it has never heard is. The remainder, and how the numbers hold up under missed detections and false alarms, is set out in [`docs/ACCURACY.md`](docs/ACCURACY.md).
+
+![The accuracy page, per-scenario shares against the oracle](docs/images/accuracy.png)
 
 ## What is in the prototype
 
