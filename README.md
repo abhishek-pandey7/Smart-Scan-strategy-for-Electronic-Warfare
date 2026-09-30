@@ -1,10 +1,20 @@
-# Ekalavya Strategy for Electronic Warfare
+<h1 align="center">
+  <a href="https://ekalavya-arvada.pages.dev">&#9654;&nbsp; Check out the demo here &nbsp;&#9664;</a>
+</h1>
+
+<p align="center">
+  <a href="https://ekalavya-arvada.pages.dev"><img alt="Launch the live demo" src="https://img.shields.io/badge/LIVE%20DEMO-ekalavya--arvada.pages.dev-2563EB?style=for-the-badge&labelColor=0B1220"></a>
+  &nbsp;
+  <a href="https://www.youtube.com/watch?v=L4syRxecqos"><img alt="Watch the demo video" src="https://img.shields.io/badge/WATCH%20THE%20VIDEO-YouTube-FF0000?style=for-the-badge&logo=youtube&logoColor=white&labelColor=0B1220"></a>
+</p>
+
+<p align="center"><i>Six receivers, one spectrum, identical ground truth. Press play and watch which one hears the radars.</i></p>
+
+<a href="https://ekalavya-arvada.pages.dev"><img alt="The Ekalavya overview page" src="docs/images/overview.png"></a>
+
+## Ekalavya Strategy for Electronic Warfare
 
 A machine-learning Electronic Support (ES) receiver scheduler. It learns when and where to look in the spectrum without prior intelligence on the emitters it will face.
-
-**[Live demo](https://ekalavya-arvada.pages.dev)** · **[Demo video](https://www.youtube.com/watch?v=L4syRxecqos)**
-
-![The Ekalavya overview page](docs/images/overview.png)
 
 A narrowband receiver hears roughly 1 GHz of an 18 GHz spectrum at a time, and radar beams illuminate it for only milliseconds. Every dwell is therefore a bet on where the next flash will be. Ekalavya learns each emitter's rhythm from what it has already heard, predicts the next flash, and spends its listening time where the return is highest.
 
