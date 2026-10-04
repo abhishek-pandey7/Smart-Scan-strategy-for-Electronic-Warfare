@@ -1,7 +1,3 @@
-<h1 align="center">
-  <a href="https://ekalavya-arvada.pages.dev">Check out the demo here</a>
-</h1>
-
 <p align="center">
   <a href="https://ekalavya-arvada.pages.dev"><img alt="Launch the live demo" src="https://img.shields.io/badge/LIVE%20DEMO-ekalavya--arvada.pages.dev-2563EB?style=for-the-badge&labelColor=0B1220"></a>
   &nbsp;
